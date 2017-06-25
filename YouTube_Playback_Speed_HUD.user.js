@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Playback Speed HUD
 // @version      0.1
-// @description  Show YouTube playback speed next to the Settings icon
+// @description  Show YouTube playback speed and system time next to the Settings icon
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
 // @match        https://www.youtube.com/watch*
@@ -14,6 +14,21 @@
 (function() {
     'use strict';
     var right_control = document.getElementsByClassName("ytp-right-controls")[0];
+    
+    //Add custom div to show current system time (useful when fullscreen)
+    (function() {
+        var system_time = document.createElement("div");
+        system_time.className = "ytp-button";
+        right_control.insertBefore(system_time, right_control.firstChild);
+        var updateTime = function() {
+            var d = new Date();
+            system_time.innerText = d.getHours() + ":" + d.getMinutes();
+        };
+        updateTime();
+        //Update every minute
+        setInterval(updateTime, 60000);
+    })();
+    
     //Add custom div to show current playback speed
     var speed_HUD = document.createElement("div");
     speed_HUD.className = "ytp-button";
