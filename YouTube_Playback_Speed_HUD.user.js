@@ -13,13 +13,18 @@
  **** Playback speed keyboard shortcuts are Shift+> and Shift+<.    ****/
 
 //*** EDIT THESE TO CUSTOMIZE THIS SCRIPT ***
+var HIDE_PLAY_ON_TV     = true;
 var SHOW_TIME_OF_DAY    = true;
 var SHOW_PLAYBACK_SPEED = true;
-var HIDE_PLAY_ON_TV     = true;
 
 (function() {
     'use strict';
     var right_control = document.getElementsByClassName("ytp-right-controls")[0];
+    
+    if (HIDE_PLAY_ON_TV) {
+        var chromecast_button = right_control.getElementsByClassName("ytp-remote-button")[0];
+        chromecast_button.style.display = "none";
+    }
     
     if (SHOW_TIME_OF_DAY) {
         //Add custom div to show current system time (useful when fullscreen)
@@ -56,7 +61,8 @@ var HIDE_PLAY_ON_TV     = true;
         var speed_source_overlay;
         var speed_source_menuitem;
         var getPlaybackSpeed = function() {
-            //Check menuitem first, because overlay doesn't update if Settings menu is used
+            //Check menuitem first because it is always correct (if it exists), whereas 
+            //the overlay's value doesn't update if speed is changed through the Settings menu.
             if (!speed_source_menuitem) {
                 var settings = document.getElementsByClassName("ytp-menuitem-label");
                 for (var i = 0; i < settings.length; i++) {
@@ -86,13 +92,10 @@ var HIDE_PLAY_ON_TV     = true;
 
         //Update speed_HUD every time there's a keypress or mouse click
         document.onclick = document.onkeydown = function(e) {
+            //TODO: Could filter these events somewhat, to act only in
+            //      cases that might have affected playback speed.
             var new_speed = getPlaybackSpeed();
             if (new_speed) speed_HUD.innerText = new_speed;
         };
-    }
-    
-    if (HIDE_PLAY_ON_TV) {
-        var chromecast_button = right_control.getElementsByClassName("ytp-remote-button")[0];
-        chromecast_button.style.display = "none";
     }
 })();
