@@ -23,7 +23,12 @@ var SHOW_PLAYBACK_SPEED = true;
     
     if (HIDE_PLAY_ON_TV) {
         var chromecast_button = right_control.getElementsByClassName("ytp-remote-button")[0];
-        chromecast_button.style.display = "none";
+        if (chromecast_button) {
+            chromecast_button.style.display = "none";
+        }
+        else {
+            console.log("Chromecast Button not found.");
+        }
     }
     
     if (SHOW_TIME_OF_DAY) {
