@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Playback Speed HUD
-// @version      0.2
+// @version      0.3
 // @description  Show YouTube playback speed and time of day next to the Settings icon
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -8,26 +8,34 @@
 // @run-at       document-start
 // ==/UserScript==
 
-/**** Playback speed keyboard shortcuts are Shift+> and Shift+<. ****/
-
-/*** EDIT THESE VARS TO CUSTOMIZE THIS SCRIPT ***/
+'use strict';
+/**** Playback speed keyboard shortcuts are Shift+> and Shift+< ****/
+/****          EDIT THESE VARS TO CUSTOMIZE THIS SCRIPT         ****/
 var SHOW_TIME_OF_DAY    = true;
 var SHOW_PLAYBACK_SPEED = true;
 var HIDE_PLAY_ON_TV_BTN = true; //Play on TV button is for sending to Chromecast
 var HIDE_MINIPLAYER_BTN = true;
 var HIDE_VIEW_SIZE_BTN  = false; //Toggle for Theater mode or Default view (keyboard shortcut 't' still works)
+// The options below are not HUD-related tweaks, but they improve YouTube in different ways
+var CONTINUOUS_THUMBNAIL_PREVIEW = true;
+var SHOW_HIDE_SUGGESTED_VIDEOS = true; //Adds a button to hide the right column of suggested videos
 
-
-'use strict';
 //Wait until video player is loaded before modifying HUD
 on_player_ready(customize_HUD);
 
 function customize_HUD() {
+    console.log("------------Customizing HUD-------------");
     if (SHOW_TIME_OF_DAY)    { show_time_of_day(); }
     if (SHOW_PLAYBACK_SPEED) { show_playback_speed(); }
     if (HIDE_PLAY_ON_TV_BTN) { hide_HUD_item("ytp-remote-button"); }
     if (HIDE_MINIPLAYER_BTN) { hide_HUD_item("ytp-miniplayer-button"); }
     if (HIDE_VIEW_SIZE_BTN)  { hide_HUD_item("ytp-size-button"); }
+    if (CONTINUOUS_THUMBNAIL_PREVIEW) {
+        //Set preview thumbnail videos to loop indefinitely
+        // yt is a variable in global scope of the running window
+        yt.config_.EXPERIMENT_FLAGS.preview_play_duration = 0; //TODO: have error handling here
+    }
+    if (SHOW_HIDE_SUGGESTED_VIDEOS) { show_hide_suggested(); }
 }
 
 var right_control; //placeholder for "ytp-right-controls" HUD container
@@ -88,6 +96,35 @@ function show_playback_speed() {
     document.onclick = document.onkeyup = update_playback_speed;
 }
 
+function show_hide_suggested() {
+    let right_column = document.querySelector("#secondary-inner");
+    let suggested_videos = document.querySelector("#secondary-inner #related");
+
+    let hide_btn = document.createElement('div');
+    hide_btn.innerText = "HIDE SUGGESTED VIDEOS";
+    hide_btn.id = "hide_suggested";
+    hide_btn.className = "more-button ytd-video-secondary-info-renderer";
+    let s = hide_btn.style;
+    s.position = "absolute";
+    s.margin = "-19px 0 0 0";
+    s.cursor = "pointer";
+    s.right = "1rem";
+
+    let hide_suggested_video_column = function() {
+        if (hide_btn.innerText.indexOf("HIDE") == 0) {
+            suggested_videos.style.visibility = "hidden";
+            hide_btn.innerText = "SHOW SUGGESTED VIDEOS";
+        }
+        else {
+            suggested_videos.style.visibility = "visible";
+            hide_btn.innerText = "HIDE SUGGESTED VIDEOS";
+        }
+    }
+
+    hide_btn.onclick = hide_suggested_video_column;
+    right_column.insertBefore(hide_btn, right_column.firstChild);
+}
+
 function missing_essential_elements() {
     if (undefined === get_right_control()) return true;
     //There is only one div of class "html5-video-player" per page/iframe.
@@ -95,12 +132,16 @@ function missing_essential_elements() {
     var movie_player = document.getElementsByClassName("html5-video-player")[0];
     if (undefined === movie_player) return true;
     if (undefined === movie_player.getPlaybackRate) return true;
+    if (SHOW_HIDE_SUGGESTED_VIDEOS && (document.querySelector("#secondary-inner #related") == null)) return true;
     return false;
 }
 
 function on_player_ready(callback, retries = 4) {
     //Execute callback once player is ready
     //"retries" parameter gives the page's javascript time to finish up after document.readyState says it's complete.
+
+    console.log("testing if video player ready");
+
     if (missing_essential_elements()) {
         if (document.readyState != "complete") {
             setTimeout(()=>on_player_ready(callback), 250);
@@ -113,6 +154,7 @@ function on_player_ready(callback, retries = 4) {
             }
             else {
                 //Abandon customization if not all elements exist once page is finished loading
+                console.log("+++++++++abandon HUD mods++++++++++++");
             }
         }
     }
@@ -121,4 +163,3 @@ function on_player_ready(callback, retries = 4) {
         callback();
     }
 }
-
