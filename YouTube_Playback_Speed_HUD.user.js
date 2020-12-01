@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Playback Speed HUD
-// @version      0.4
+// @version      0.5
 // @description  Show YouTube playback speed and time of day next to the Settings icon
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -18,8 +18,8 @@ var HIDE_PLAY_ON_TV_BTN = true; //Play on TV button is for sending to Chromecast
 var HIDE_MINIPLAYER_BTN = true;
 var HIDE_VIEW_SIZE_BTN  = false; //Toggle for Theater mode or Default view (keyboard shortcut 't' still works)
 // The options below are not HUD-related tweaks, but they improve YouTube in different ways
-var CONTINUOUS_THUMBNAIL_PREVIEW = true;
 var SHOW_HIDE_SUGGESTED_VIDEOS = true; //Adds a button to hide the right column of suggested videos
+var CONTINUOUS_THUMBNAIL_PREVIEW = true;
 
 //Wait until video player is loaded before modifying HUD
 on_player_ready(customize_HUD);
@@ -28,15 +28,15 @@ function customize_HUD() {
     console.log("------------Customizing HUD-------------");
     if (SHOW_TIME_OF_DAY)    { show_time_of_day(); }
     if (SHOW_PLAYBACK_SPEED) { show_playback_speed(); }
-    if (HIDE_PLAY_ON_TV_BTN) { hide_HUD_item("ytp-remote-button"); }
-    if (HIDE_MINIPLAYER_BTN) { hide_HUD_item("ytp-miniplayer-button"); }
-    if (HIDE_VIEW_SIZE_BTN)  { hide_HUD_item("ytp-size-button"); }
+    if (HIDE_PLAY_ON_TV_BTN) { hide_HUD_item(".ytp-button[aria-label='Play on TV']"); }
+    if (HIDE_MINIPLAYER_BTN) { hide_HUD_item(".ytp-miniplayer-button"); }
+    if (HIDE_VIEW_SIZE_BTN)  { hide_HUD_item(".ytp-size-button"); }
+    if (SHOW_HIDE_SUGGESTED_VIDEOS) { show_hide_suggested(); }
     if (CONTINUOUS_THUMBNAIL_PREVIEW) {
         //Set preview thumbnail videos to loop indefinitely
         // yt is a variable in global scope of the running window
         yt.config_.EXPERIMENT_FLAGS.preview_play_duration = 0; //TODO: have error handling here
     }
-    if (SHOW_HIDE_SUGGESTED_VIDEOS) { show_hide_suggested(); }
 }
 
 var right_control; //placeholder for "ytp-right-controls" HUD container
@@ -54,11 +54,11 @@ function add_HUD_item(class_name) {
     }
 }
 
-function hide_HUD_item(itemClassName) {
+function hide_HUD_item(css_selector) {
     if (get_right_control()) {
-        var hud_item = right_control.getElementsByClassName(itemClassName)[0];
+        var hud_item = right_control.querySelector(css_selector);
         if (hud_item) {
-            hud_item.style.display = "none";
+            hud_item.setAttribute("hidden","");
         }
     }
 }
@@ -149,7 +149,8 @@ function missing_essential_elements() {
     var movie_player = document.getElementsByClassName("html5-video-player")[0];
     if (undefined === movie_player) return true;
     if (undefined === movie_player.getPlaybackRate) return true;
-    if (SHOW_HIDE_SUGGESTED_VIDEOS && (document.querySelector("#secondary-inner #related") == null)) return true;
+    if (SHOW_HIDE_SUGGESTED_VIDEOS && ((document.querySelector("#secondary-inner") == null)
+                                   || (document.querySelector("#related") == null))) return true;
     return false;
 }
 
