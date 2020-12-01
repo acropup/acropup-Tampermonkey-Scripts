@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         YouTube Playback Speed HUD
-// @version      0.3
+// @version      0.4
 // @description  Show YouTube playback speed and time of day next to the Settings icon
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
 // @match        https://www.youtube.com/*
 // @run-at       document-start
+// @grant        GM_addStyle
 // ==/UserScript==
 
 'use strict';
@@ -97,32 +98,48 @@ function show_playback_speed() {
 }
 
 function show_hide_suggested() {
-    let right_column = document.querySelector("#secondary-inner");
-    let suggested_videos = document.querySelector("#secondary-inner #related");
+    GM_addStyle(`
+      ytd-watch-flexy #hide-related {
+        position: absolute;
+        right: 1rem;
+        margin: -19px 0 0 0;
+        cursor: pointer;
+      }
+      ytd-watch-flexy[is-two-columns_] #primary #hide-related {
+        display: none;
+      }
+      ytd-watch-flexy #hide-related::before {
+        content: "Hide suggested videos";
+      }
+      ytd-watch-flexy[hide-related_] #hide-related::before {
+        content: "Show suggested videos";
+      }
+      ytd-watch-flexy[hide-related_] #related.ytd-watch-flexy {
+        display: none;
+      }`);
 
     let hide_btn = document.createElement('div');
-    hide_btn.innerText = "HIDE SUGGESTED VIDEOS";
-    hide_btn.id = "hide_suggested";
+    hide_btn.id = "hide-related";
     hide_btn.className = "more-button ytd-video-secondary-info-renderer";
-    let s = hide_btn.style;
-    s.position = "absolute";
-    s.margin = "-19px 0 0 0";
-    s.cursor = "pointer";
-    s.right = "1rem";
 
-    let hide_suggested_video_column = function() {
-        if (hide_btn.innerText.indexOf("HIDE") == 0) {
-            suggested_videos.style.visibility = "hidden";
-            hide_btn.innerText = "SHOW SUGGESTED VIDEOS";
-        }
-        else {
-            suggested_videos.style.visibility = "visible";
-            hide_btn.innerText = "HIDE SUGGESTED VIDEOS";
-        }
+    // This is where we put the hide-related_ attribute that triggers the above CSS rules
+    let flex_layout = document.querySelector("#content ytd-watch-flexy");
+    let hide_related_video_column = function() {
+        flex_layout.toggleAttribute("hide-related_");
     }
 
-    hide_btn.onclick = hide_suggested_video_column;
+    let hide_btn2 = hide_btn.cloneNode(true);
+    hide_btn.onclick = hide_related_video_column;
+    hide_btn2.onclick = hide_related_video_column;
+
+    // Normally, the #related videos are in the #secondary column on the right, but
+    // an especially narrow browser window hides the #secondary column, and places
+    // the #related videos under the #merch-shelf in the #primary column.
+    // We need a button for each location that #related may appear.
+    let merch = document.querySelector("#primary-inner #merch-shelf");
+    let right_column = document.querySelector("#secondary-inner");
     right_column.insertBefore(hide_btn, right_column.firstChild);
+    merch.parentElement.insertBefore(hide_btn2, merch.nextSibling);
 }
 
 function missing_essential_elements() {
