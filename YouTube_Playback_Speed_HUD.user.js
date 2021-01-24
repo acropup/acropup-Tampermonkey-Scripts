@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Playback Speed HUD
-// @version      0.5
+// @version      0.6
 // @description  Show YouTube playback speed and time of day next to the Settings icon
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -12,14 +12,16 @@
 'use strict';
 /**** Playback speed keyboard shortcuts are Shift+> and Shift+< ****/
 /****          EDIT THESE VARS TO CUSTOMIZE THIS SCRIPT         ****/
-var SHOW_TIME_OF_DAY    = true;
-var SHOW_PLAYBACK_SPEED = true;
-var HIDE_PLAY_ON_TV_BTN = true; //Play on TV button is for sending to Chromecast
-var HIDE_MINIPLAYER_BTN = true;
-var HIDE_VIEW_SIZE_BTN  = false; //Toggle for Theater mode or Default view (keyboard shortcut 't' still works)
+const SHOW_TIME_OF_DAY       = true;
+const SHOW_PLAYBACK_SPEED    = true;
+const HIDE_PLAY_ON_TV_BTN    = true;  //Play on TV button is for sending to Chromecast
+const HIDE_MINIPLAYER_BTN    = true;
+const HIDE_VIEW_SIZE_BTN     = false; //Toggle for Theater mode or Default view (keyboard shortcut 't' still works)
+const HIDE_PREVIOUS_NEXT_BTN = true;  //Hides the Previous and Next Video buttons (beside the Play/Pause button)
+
 // The options below are not HUD-related tweaks, but they improve YouTube in different ways
-var SHOW_HIDE_SUGGESTED_VIDEOS = true; //Adds a button to hide the right column of suggested videos
-var CONTINUOUS_THUMBNAIL_PREVIEW = true;
+const ENABLE_HIDE_SUGGESTED_VIDEOS = true; //Adds a button to hide the right column of suggested videos
+const CONTINUOUS_THUMBNAIL_PREVIEW = true;
 
 //Wait until video player is loaded before modifying HUD
 on_player_ready(customize_HUD);
@@ -31,7 +33,9 @@ function customize_HUD() {
     if (HIDE_PLAY_ON_TV_BTN) { hide_HUD_item(".ytp-button[aria-label='Play on TV']"); }
     if (HIDE_MINIPLAYER_BTN) { hide_HUD_item(".ytp-miniplayer-button"); }
     if (HIDE_VIEW_SIZE_BTN)  { hide_HUD_item(".ytp-size-button"); }
-    if (SHOW_HIDE_SUGGESTED_VIDEOS) { show_hide_suggested(); }
+    if (HIDE_PREVIOUS_NEXT_BTN) { hide_HUD_item(".ytp-prev-button");
+                                  hide_HUD_item(".ytp-next-button"); }
+    if (ENABLE_HIDE_SUGGESTED_VIDEOS) { enable_hide_suggested(); }
     if (CONTINUOUS_THUMBNAIL_PREVIEW) {
         //Set preview thumbnail videos to loop indefinitely
         // yt is a variable in global scope of the running window
@@ -39,24 +43,36 @@ function customize_HUD() {
     }
 }
 
-var right_control; //placeholder for "ytp-right-controls" HUD container
-function get_right_control() {
-    right_control = right_control || document.getElementsByClassName("ytp-right-controls")[0];
-    return right_control;
+var movie_player;
+var hud_controls;
+var hud_right_controls; //placeholder for "ytp-right-controls" HUD container
+
+function get_movie_player() {
+    //There is only one div of class "html5-video-player" per page/iframe.
+    //The ID of this div (normally #movie_player) is inconsistent for embedded videos.
+    movie_player = movie_player || document.getElementsByClassName("html5-video-player")[0];
+    return movie_player;
+}
+function get_hud_controls() {
+    hud_controls = hud_controls || document.getElementsByClassName("ytp-chrome-controls")[0];
+    return hud_controls;
+}
+function get_right_controls() {
+    hud_right_controls = hud_right_controls || document.getElementsByClassName("ytp-right-controls")[0];
+    return hud_right_controls;
 }
 
 function add_HUD_item(class_name) {
-    if (get_right_control()) {
+    if (get_right_controls()) {
         var new_item = document.createElement("div");
         new_item.className = class_name;
-        right_control.insertBefore(new_item, right_control.firstChild);
+        hud_right_controls.insertBefore(new_item, hud_right_controls.firstChild);
         return new_item;
     }
 }
-
 function hide_HUD_item(css_selector) {
-    if (get_right_control()) {
-        var hud_item = right_control.querySelector(css_selector);
+    if (get_hud_controls()) {
+        var hud_item = hud_controls.querySelector(css_selector);
         if (hud_item) {
             hud_item.setAttribute("hidden","");
         }
@@ -86,18 +102,19 @@ function show_playback_speed() {
     //Add custom div to show current playback speed
     var speed_HUD = add_HUD_item("ytp-button");
     var playdiv = document.getElementsByClassName("html5-video-player")[0];
+
+    //Update speed_HUD every time there's a keypress or mouse click
+    document.onclick = document.onkeyup = update_playback_speed;
+    update_playback_speed();
     function update_playback_speed() {
+        //TODO: Could filter these events somewhat, to act only in
+        //      cases that might have affected playback speed.
         var rate = playdiv.getPlaybackRate();
         if (rate) speed_HUD.innerText = rate + "x";
     };
-    update_playback_speed();
-    //Update speed_HUD every time there's a keypress or mouse click
-        //TODO: Could filter these events somewhat, to act only in
-        //      cases that might have affected playback speed.
-    document.onclick = document.onkeyup = update_playback_speed;
 }
 
-function show_hide_suggested() {
+function enable_hide_suggested() {
     GM_addStyle(`
       ytd-watch-flexy #hide-related {
         position: absolute;
@@ -143,14 +160,10 @@ function show_hide_suggested() {
 }
 
 function missing_essential_elements() {
-    if (undefined === get_right_control()) return true;
-    //There is only one div of class "html5-video-player" per page/iframe.
-    //The ID of this div (normally #movie_player) is inconsistent for embedded videos.
-    var movie_player = document.getElementsByClassName("html5-video-player")[0];
-    if (undefined === movie_player) return true;
-    if (undefined === movie_player.getPlaybackRate) return true;
-    if (SHOW_HIDE_SUGGESTED_VIDEOS && ((document.querySelector("#secondary-inner") == null)
-                                   || (document.querySelector("#related") == null))) return true;
+    if (undefined === get_right_controls()) return true;
+    if (undefined === get_movie_player()?.getPlaybackRate) return true;
+    if (ENABLE_HIDE_SUGGESTED_VIDEOS && ((document.querySelector("#secondary-inner") == null)
+                                     || (document.querySelector("#related") == null))) return true;
     return false;
 }
 
