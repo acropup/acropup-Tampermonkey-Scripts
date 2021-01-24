@@ -73,12 +73,7 @@ function add_HUD_item(class_name) {
     }
 }
 function hide_HUD_item(css_selector) {
-    if (get_hud_controls()) {
-        var hud_item = hud_controls.querySelector(css_selector);
-        if (hud_item) {
-            hud_item.setAttribute("hidden","");
-        }
-    }
+    get_hud_controls()?.querySelector(css_selector)?.setAttribute("hidden","");
 }
 
 function show_time_of_day() {
@@ -86,13 +81,12 @@ function show_time_of_day() {
     var system_time = add_HUD_item("ytp-button");
     if (system_time) {
         function update_time() {
-            var d = (new Date()).toLocaleTimeString(); //Returns "HH:mm:ss AMPM"
-            var t = d.substring(0, d.lastIndexOf(":"));//Keep "HH:mm" part
-            if (system_time.innerText != t) {
-                system_time.innerText = t;
-            }
-            //Update 5ms after the next minute has started
-            var s = d.substr(d.lastIndexOf(":") + 1, 2);
+            var d = (new Date()).toLocaleTimeString();  //Returns "HH:mm:ss AMPM"
+            var t = d.substring(0, d.lastIndexOf(":")); //Get "HH:mm" part
+            var s = d.substr(d.lastIndexOf(":") + 1, 2);//Get "ss" part
+            //Update displayed time to current
+            system_time.innerText = t;
+            //Schedule next update for 5ms after the next minute has started
             var next_update = 1000*(60-s) + 5;
             setTimeout(update_time, next_update);
         }
