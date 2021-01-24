@@ -20,6 +20,7 @@ const HIDE_VIEW_SIZE_BTN     = false; //Toggle for Theater mode or Default view 
 const HIDE_PREVIOUS_NEXT_BTN = true;  //Hides the Previous and Next Video buttons (beside the Play/Pause button)
 
 // The options below are not HUD-related tweaks, but they improve YouTube in different ways
+const ENABLE_1_SECOND_SEEK         = true; //While a video is playing, comma and period seek 1s back and forward
 const ENABLE_HIDE_SUGGESTED_VIDEOS = true; //Adds a button to hide the right column of suggested videos
 const CONTINUOUS_THUMBNAIL_PREVIEW = true;
 
@@ -35,6 +36,7 @@ function customize_HUD() {
     if (HIDE_VIEW_SIZE_BTN)  { hide_HUD_item(".ytp-size-button"); }
     if (HIDE_PREVIOUS_NEXT_BTN) { hide_HUD_item(".ytp-prev-button");
                                   hide_HUD_item(".ytp-next-button"); }
+    if (ENABLE_1_SECOND_SEEK)         { enable_1_second_seek(); }
     if (ENABLE_HIDE_SUGGESTED_VIDEOS) { enable_hide_suggested(); }
     if (CONTINUOUS_THUMBNAIL_PREVIEW) {
         //Set preview thumbnail videos to loop indefinitely
@@ -101,17 +103,25 @@ function show_time_of_day() {
 function show_playback_speed() {
     //Add custom div to show current playback speed
     var speed_HUD = add_HUD_item("ytp-button");
-    var playdiv = document.getElementsByClassName("html5-video-player")[0];
-
-    //Update speed_HUD every time there's a keypress or mouse click
-    document.onclick = document.onkeyup = update_playback_speed;
-    update_playback_speed();
-    function update_playback_speed() {
-        //TODO: Could filter these events somewhat, to act only in
-        //      cases that might have affected playback speed.
-        var rate = playdiv.getPlaybackRate();
-        if (rate) speed_HUD.innerText = rate + "x";
+    function update_playback_speed(new_rate) {
+        if (rate) speed_HUD.innerText = new_rate + "x";
     };
+    movie_player.addEventListener('onPlaybackRateChange', update_playback_speed);
+    update_playback_speed(movie_player.getPlaybackRate());
+}
+
+function enable_1_second_seek() {
+    if (!get_movie_player()) return;
+    //TODO: This fires even if you're in a text box writing a comment or search terms!!!!!!!!!!!!!!
+    document.addEventListener("keydown", (e) => {
+        if (e.altKey || e.ctrlKey || e.shiftKey) return;
+        let ps = movie_player.getPlayerState();
+        if (ps == 1 || ps == 3) {  // if playing or buffering
+            if (e.code == "Comma") movie_player.seekBy(-2);
+            if (e.code == "Period") movie_player.seekBy(2);
+        }
+        return;
+    });
 }
 
 function enable_hide_suggested() {
