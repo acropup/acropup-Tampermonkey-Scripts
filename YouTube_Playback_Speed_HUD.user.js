@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Playback Speed HUD
-// @version      0.6
+// @version      0.7
 // @description  Show YouTube playback speed and time of day next to the Settings icon
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -17,6 +17,7 @@ const SHOW_PLAYBACK_SPEED    = true;
 const HIDE_PLAY_ON_TV_BTN    = true;  // Play on TV button is for sending to Chromecast.
 const HIDE_MINIPLAYER_BTN    = true;
 const HIDE_VIEW_SIZE_BTN     = false; // Toggle for Theater mode or Default view (keyboard shortcut 't' still works).
+const DISABLE_AUTOPLAY       = true;
 const HIDE_PREVIOUS_NEXT_BTN = true;  // Hide the Previous and Next Video buttons (beside the Play/Pause button).
 const NOTIFY_QUALITY_CHANGE  = true;
 const ENFORCE_VIDEO_QUALITY  = "FULL";
@@ -44,6 +45,7 @@ function customize_HUD() {
     if (HIDE_PLAY_ON_TV_BTN) { hide_HUD_item(".ytp-button[aria-label='Play on TV']"); }
     if (HIDE_MINIPLAYER_BTN) { hide_HUD_item(".ytp-miniplayer-button"); }
     if (HIDE_VIEW_SIZE_BTN)  { hide_HUD_item(".ytp-size-button"); }
+    if (DISABLE_AUTOPLAY)    { disable_autoplay();
     if (HIDE_PREVIOUS_NEXT_BTN) { hide_HUD_item(".ytp-prev-button");
                                   hide_HUD_item(".ytp-next-button"); }
     if (NOTIFY_QUALITY_CHANGE) { enable_notify_quality_change(); }
@@ -87,6 +89,10 @@ function add_HUD_item(class_name) {
 }
 function hide_HUD_item(css_selector) {
     get_hud_controls()?.querySelector(css_selector)?.setAttribute("hidden","");
+}
+
+function disable_autoplay() {
+    document.querySelector('.ytp-autonav-toggle-button[aria-checked="true"]')?.click();
 }
 
 function show_time_of_day() {
