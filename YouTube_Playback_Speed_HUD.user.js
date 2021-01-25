@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Playback Speed HUD
-// @version      0.7
+// @version      0.8
 // @description  Show YouTube playback speed and time of day next to the Settings icon
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -35,10 +35,11 @@ const ENABLE_HIDE_SUGGESTED_VIDEOS = true; // Adds a button to hide the right co
 const CONTINUOUS_THUMBNAIL_PREVIEW = true; // When hovering over video thumbnails, the video preview will repeat forever.
 
 //Wait until video player is loaded before modifying HUD
-on_player_ready(customize_HUD);
+on_player_ready(is_page_ready, customize_HUD);
 
 
 function customize_HUD() {
+    //This only needs to be done once, because the video player is reused 
     console.log("------------Customizing HUD-------------");
     if (SHOW_TIME_OF_DAY)    { show_time_of_day(); }
     if (SHOW_PLAYBACK_SPEED) { show_playback_speed(); }
@@ -46,6 +47,7 @@ function customize_HUD() {
     if (HIDE_MINIPLAYER_BTN) { hide_HUD_item(".ytp-miniplayer-button"); }
     if (HIDE_VIEW_SIZE_BTN)  { hide_HUD_item(".ytp-size-button"); }
     if (DISABLE_AUTOPLAY)    { disable_autoplay();
+                               hide_HUD_item('.ytp-button[data-tooltip-target-id="ytp-autonav-toggle-button"]'); }
     if (HIDE_PREVIOUS_NEXT_BTN) { hide_HUD_item(".ytp-prev-button");
                                   hide_HUD_item(".ytp-next-button"); }
     if (NOTIFY_QUALITY_CHANGE) { enable_notify_quality_change(); }
@@ -288,38 +290,46 @@ function enable_hide_suggested() {
     merch.parentElement.insertBefore(hide_btn2, merch.nextSibling);
 }
 
-function missing_essential_elements() {
-    if (undefined === get_right_controls()) return true;
-    if (undefined === get_movie_player()?.getPlaybackRate) return true;
-    if (ENABLE_HIDE_SUGGESTED_VIDEOS && ((document.querySelector("#secondary-inner") == null)
-                                     || (document.querySelector("#related") == null))) return true;
-    return false;
+function isFunction(f) {
+    return Object.prototype.toString.call(f) == '[object Function]';
 }
 
-function on_player_ready(callback, retries = 4) {
-    //Execute callback once player is ready
-    //"retries" parameter gives the page's javascript time to finish up after document.readyState says it's complete.
+function is_page_ready() {
+    if (undefined === get_right_controls()) return false;
+    if (undefined === get_movie_player()?.getPlaybackRate) return false;
+    if (undefined === get_movie_player()?.getPlaybackQuality) return false;
+    if (ENABLE_HIDE_SUGGESTED_VIDEOS && ((document.querySelector("#secondary-inner") == null)
+                                     || (document.querySelector("#related") == null))) return false;
+    return true;
+}
 
-    console.log("testing if video player ready");
-
-    if (missing_essential_elements()) {
-        if (document.readyState != "complete") {
-            setTimeout(()=>on_player_ready(callback), 250);
-        }
-        else {
-            //Document is apparently complete, but not all elements are ready.
-            //Give the page's javascript a little more time to finish up.
-            if (retries > 0) {
-                setTimeout(()=>on_player_ready(callback, retries-1), 250);
-            }
-            else {
-                //Abandon customization if not all elements exist once page is finished loading
-                console.log("+++++++++abandon HUD mods++++++++++++");
-            }
+function keep_trying(callback_try, callback_success = undefined, retries = 4, retry_ms = 100) {
+    // 'callback_try' function is run every 'retry_ms' milliseconds, for a maximum of 'retries' attempts
+    // after the page has completed loading. It may retry numerous times before the document is ready.
+    // If 'callback_try' succeeds, then 'callback_success' function is run once (if one is provided).
+    if (callback_try()) {
+        if (isFunction(callback_success)) {
+            callback_success();
         }
     }
     else {
-        //All elements are loaded and ready
+        // Only start counting retries once document is loaded, to give the page's javascript a little more time to finish up.
+        if (document.readyState == "complete") {
+            retries--;
+        }
+        if (retries >= 0) {
+            setTimeout(() => keep_trying(callback_try, callback_success, retries, retry_ms), retry_ms);
+        }
+    }
+}
+
+function on_player_ready(ready, callback) {
+    if (ready()) {
         callback();
+    }
+    else {
+        window.addEventListener("yt-navigate-finish",
+                                ()=>keep_trying(ready, callback), 
+                                { once: true, passive: true, capture: true });
     }
 }
