@@ -14,18 +14,28 @@
 /****          EDIT THESE VARS TO CUSTOMIZE THIS SCRIPT         ****/
 const SHOW_TIME_OF_DAY       = true;
 const SHOW_PLAYBACK_SPEED    = true;
-const HIDE_PLAY_ON_TV_BTN    = true;  //Play on TV button is for sending to Chromecast
+const HIDE_PLAY_ON_TV_BTN    = true;  // Play on TV button is for sending to Chromecast.
 const HIDE_MINIPLAYER_BTN    = true;
-const HIDE_VIEW_SIZE_BTN     = false; //Toggle for Theater mode or Default view (keyboard shortcut 't' still works)
-const HIDE_PREVIOUS_NEXT_BTN = true;  //Hides the Previous and Next Video buttons (beside the Play/Pause button)
+const HIDE_VIEW_SIZE_BTN     = false; // Toggle for Theater mode or Default view (keyboard shortcut 't' still works).
+const HIDE_PREVIOUS_NEXT_BTN = true;  // Hide the Previous and Next Video buttons (beside the Play/Pause button).
+const NOTIFY_QUALITY_CHANGE  = true;
+const ENFORCE_VIDEO_QUALITY  = "FULL";
+/* ENFORCE_VIDEO_QUALITY can be set to:
+     false  - Video quality not enforced. Youtube chooses "Auto" like usual.
+     "MAX"  - The highest quality level for the video is chosen.
+     "FULL" - Screen resolution is considered, and the highest quality for your screen resolution is chosen.
+     Any quality name: "highres", "hd2880", "hd2160", "hd1440", "hd1080", "hd720", "large", "medium", "small", "tiny"
+     Any y-resolution:  4320, 2880, 2160, 1440, 1080, 720, 480, 360, 240, 144 */
 
-// The options below are not HUD-related tweaks, but they improve YouTube in different ways
-const ENABLE_1_SECOND_SEEK         = true; //While a video is playing, comma and period seek 1s back and forward
-const ENABLE_HIDE_SUGGESTED_VIDEOS = true; //Adds a button to hide the right column of suggested videos
-const CONTINUOUS_THUMBNAIL_PREVIEW = true;
+// The options below are not HUD-related tweaks, but they improve YouTube in different ways.
+const ENABLE_QUALITY_PLUS_MINUS    = true; // Plus (+) key chooses higher video quality, Minus (-) key lowers video quality.
+const ENABLE_3_SECOND_SEEK         = true; // Comma (,) and period (.) seek 3s back and forward, but only while a video is playing.
+const ENABLE_HIDE_SUGGESTED_VIDEOS = true; // Adds a button to hide the right column of suggested videos.
+const CONTINUOUS_THUMBNAIL_PREVIEW = true; // When hovering over video thumbnails, the video preview will repeat forever.
 
 //Wait until video player is loaded before modifying HUD
 on_player_ready(customize_HUD);
+
 
 function customize_HUD() {
     console.log("------------Customizing HUD-------------");
@@ -36,7 +46,10 @@ function customize_HUD() {
     if (HIDE_VIEW_SIZE_BTN)  { hide_HUD_item(".ytp-size-button"); }
     if (HIDE_PREVIOUS_NEXT_BTN) { hide_HUD_item(".ytp-prev-button");
                                   hide_HUD_item(".ytp-next-button"); }
-    if (ENABLE_1_SECOND_SEEK)         { enable_1_second_seek(); }
+    if (NOTIFY_QUALITY_CHANGE) { enable_notify_quality_change(); }
+    if (ENFORCE_VIDEO_QUALITY) { enforce_video_quality(ENFORCE_VIDEO_QUALITY); }
+    if (ENABLE_QUALITY_PLUS_MINUS)    { enable_quality_plus_minus(); }
+    if (ENABLE_3_SECOND_SEEK)         { enable_3_second_seek(); }
     if (ENABLE_HIDE_SUGGESTED_VIDEOS) { enable_hide_suggested(); }
     if (CONTINUOUS_THUMBNAIL_PREVIEW) {
         //Set preview thumbnail videos to loop indefinitely
@@ -97,22 +110,128 @@ function show_time_of_day() {
 function show_playback_speed() {
     //Add custom div to show current playback speed
     var speed_HUD = add_HUD_item("ytp-button");
-    function update_playback_speed(new_rate) {
-        if (rate) speed_HUD.innerText = new_rate + "x";
+    function update_playback_speed(rate) {
+        if (rate) speed_HUD.innerText = rate + "x";
     };
     movie_player.addEventListener('onPlaybackRateChange', update_playback_speed);
     update_playback_speed(movie_player.getPlaybackRate());
 }
 
-function enable_1_second_seek() {
+function enable_notify_quality_change() {
     if (!get_movie_player()) return;
-    //TODO: This fires even if you're in a text box writing a comment or search terms!!!!!!!!!!!!!!
+    function notify_quality_change(e) {
+        let overlay_text = movie_player.querySelector(".ytp-bezel-text");
+        let outer = overlay_text.parentElement.parentElement;
+        //Change the SVG within .ytp-bezel-icon, otherwise it'll be whatever it was last (play, pause, ffwd, rev, volume).
+        let overlay_icon = outer.querySelector(".ytp-bezel-icon");
+        let settings_btn = hud_right_controls.querySelector(".ytp-settings-button");
+        overlay_icon.innerHTML = settings_btn.innerHTML; //Copy the gear SVG to the overlay icon
+        //I don't copy over the quality badge, such as HD (.ytp-hd-quality-badge), 2K, 4K, etc. 
+        //because the badge hasn't been applied to the settings_btn yet. I'd need to do a mapping myself.
+        overlay_text.innerText = e || movie_player.getPlaybackQuality();
+        outer.style.removeProperty('display');
+        outer.classList.remove('ytp-bezel-text-hide');
+        setTimeout(()=>outer.style.setProperty('display', 'none'), 750);
+    }
+    movie_player.addEventListener('onPlaybackQualityChange', notify_quality_change);
+}
+
+// Video quality code was inspired by 'Youtube HD' by adisib. (https://greasyfork.org/en/scripts/23661-youtube-hd)
+const all_qualities = ["highres", "hd2880", "hd2160", "hd1440", "hd1080", "hd720", "large", "medium", "small", "tiny"];
+const all_y_res     = [     4320,     2880,     2160,     1440,     1080,     720,     480,      360,     240,    144];
+function set_video_quality(desired_quality) {
+    if (desired_quality.toLowerCase) desired_quality = desired_quality.toLowerCase();
+    let qu = "auto";
+    let available_qualities = movie_player.getAvailableQualityLevels();
+    switch (desired_quality) {
+        case "max":  // Choose highest quality available
+        {
+            qu = available_qualities[0];
+            break;
+        }
+        case "full": // Choose highest quality for user's screen (opt for higher quality if screen resolution is between quality levels)
+        {
+            let y_max = window.screen.height;
+            let available_y_res = available_qualities.map((val) => all_y_res[all_qualities.indexOf(val)]);
+            let y_match = available_y_res.reduce((prev, cur) => cur >= y_max ? cur : prev, available_y_res[0]);
+            qu = all_qualities[all_y_res.indexOf(y_match)];
+            break;
+        }
+        case "+":    // Use + and - to increase and decrease playback quality
+        case "-":
+        {
+            let current_quality = movie_player.getPlaybackQuality();
+            let current_index = available_qualities.indexOf(current_quality);
+            let new_index = (desired_quality === "+") ? current_index - 1 : current_index + 1;
+            new_index = new_index < 0 ? 0 : new_index < available_qualities.length ? new_index : available_qualities.length - 1;
+            qu = available_qualities[new_index];
+            break;
+        }
+        default:     // Choose a quality based on name or y-resolution
+        {   // If a specific quality is desired and not available, choose the next (lower) quality level.
+            let desired_index = (isNaN(desired_quality)) 
+                                ? all_qualities.indexOf(desired_quality)
+                                : all_y_res.indexOf(desired_quality);
+            if (desired_index >= 0) {
+                let found_quality = all_qualities.slice(desired_index, all_qualities.length)
+                                                .find(q => available_qualities.includes(q));
+                qu = found_quality || "auto";
+            }
+            break;
+        }
+    }
+    movie_player?.setPlaybackQualityRange(qu);
+    console.log("Quality request '" + desired_quality + "': Set to '" + qu + "'");
+}
+
+function enforce_video_quality(desired_quality = "FULL") {
+    set_video_quality(desired_quality);
+    let video_id = movie_player.getVideoData().video_id;
+    // 'loadstart' event happens when a new video is loaded, OR when a different video quality is selected.
+    // We want to enforce video quality once per video, when it is first loaded.
+    let video_elem = movie_player.getElementsByTagName('video')[0];
+    video_elem.addEventListener('loadstart', (e) => {
+        let new_video_id = movie_player.getVideoData().video_id;
+        if (new_video_id != video_id) {
+            video_id = new_video_id;
+            set_video_quality(desired_quality);
+        }
+    })
+}
+
+function is_textbox_active() {
+    let da = document.activeElement, dan = da.nodeName;
+    return (dan == 'TEXTAREA' || dan == 'INPUT'
+        || (dan == 'DIV' && da.isContentEditable));
+}
+
+function enable_3_second_seek() {
+    if (!get_movie_player()) return;
     document.addEventListener("keydown", (e) => {
         if (e.altKey || e.ctrlKey || e.shiftKey) return;
+        if (is_textbox_active()) return;
         let ps = movie_player.getPlayerState();
-        if (ps == 1 || ps == 3) {  // if playing or buffering
-            if (e.code == "Comma") movie_player.seekBy(-2);
-            if (e.code == "Period") movie_player.seekBy(2);
+        if (ps == 1 || ps == 3) {  // if playing (1) or buffering (3)
+            if (e.code == "Comma") movie_player.seekBy(-3);
+            if (e.code == "Period") movie_player.seekBy(3);
+        }
+        return;
+    });
+}
+
+function enable_quality_plus_minus() {
+    if (!get_movie_player()) return;
+    document.addEventListener("keyup", (e) => {
+        if (e.altKey || e.ctrlKey) return;
+        if (is_textbox_active()) return;
+        switch (e.key) {
+            case "+":
+            case "=": {
+                set_video_quality("+");
+            } break;
+            case "-": {
+                set_video_quality("-");
+            } break;
         }
         return;
     });
