@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Playback Speed HUD
-// @version      0.8
+// @version      0.9
 // @description  Show YouTube playback speed and time of day next to the Settings icon
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -58,7 +58,8 @@ function customize_HUD() {
     if (CONTINUOUS_THUMBNAIL_PREVIEW) {
         //Set preview thumbnail videos to loop indefinitely
         // yt is a variable in global scope of the running window
-        yt.config_.EXPERIMENT_FLAGS.preview_play_duration = 0; //TODO: have error handling here
+        // If this ever changes, it will silently fail. Not a big deal.
+        window?.yt?.config_?.EXPERIMENT_FLAGS?.preview_play_duration = 0;
     }
 }
 
@@ -136,7 +137,9 @@ function enable_notify_quality_change() {
         overlay_icon.innerHTML = settings_btn.innerHTML; //Copy the gear SVG to the overlay icon
         //I don't copy over the quality badge, such as HD (.ytp-hd-quality-badge), 2K, 4K, etc. 
         //because the badge hasn't been applied to the settings_btn yet. I'd need to do a mapping myself.
-        overlay_text.innerText = e || movie_player.getPlaybackQuality();
+        let qu = e || movie_player.getPlaybackQuality();
+        let qi = all_qualities.indexOf(qu);
+        overlay_text.innerText = quality_names[qi];
         outer.style.removeProperty('display');
         outer.classList.remove('ytp-bezel-text-hide');
         setTimeout(()=>outer.style.setProperty('display', 'none'), 750);
@@ -147,6 +150,7 @@ function enable_notify_quality_change() {
 // Video quality code was inspired by 'Youtube HD' by adisib. (https://greasyfork.org/en/scripts/23661-youtube-hd)
 const all_qualities = ["highres", "hd2880", "hd2160", "hd1440", "hd1080", "hd720", "large", "medium", "small", "tiny"];
 const all_y_res     = [     4320,     2880,     2160,     1440,     1080,     720,     480,      360,     240,    144];
+const quality_names = [     "8K",     "4K",     "2K",  "1440p",  "1080p",  "720p",  "480p",   "360p",  "240p", "144p"];
 function set_video_quality(desired_quality) {
     if (desired_quality.toLowerCase) desired_quality = desired_quality.toLowerCase();
     let qu = "auto";
