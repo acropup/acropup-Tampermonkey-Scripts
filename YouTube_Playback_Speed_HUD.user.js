@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Playback Speed HUD
-// @version      0.9
+// @version      0.10
 // @description  Show YouTube playback speed and time of day next to the Settings icon
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -128,23 +128,25 @@ function show_playback_speed() {
 
 function enable_notify_quality_change() {
     if (!get_movie_player()) return;
-    function notify_quality_change(e) {
-        let overlay_text = movie_player.querySelector(".ytp-bezel-text");
-        let outer = overlay_text.parentElement.parentElement;
-        //Change the SVG within .ytp-bezel-icon, otherwise it'll be whatever it was last (play, pause, ffwd, rev, volume).
-        let overlay_icon = outer.querySelector(".ytp-bezel-icon");
-        let settings_btn = hud_right_controls.querySelector(".ytp-settings-button");
-        overlay_icon.innerHTML = settings_btn.innerHTML; //Copy the gear SVG to the overlay icon
-        //I don't copy over the quality badge, such as HD (.ytp-hd-quality-badge), 2K, 4K, etc. 
-        //because the badge hasn't been applied to the settings_btn yet. I'd need to do a mapping myself.
-        let qu = e || movie_player.getPlaybackQuality();
-        let qi = all_qualities.indexOf(qu);
-        overlay_text.innerText = quality_names[qi];
-        outer.style.removeProperty('display');
-        outer.classList.remove('ytp-bezel-text-hide');
-        setTimeout(()=>outer.style.setProperty('display', 'none'), 750);
-    }
     movie_player.addEventListener('onPlaybackQualityChange', notify_quality_change);
+}
+let hide_overlay_timer = undefined;
+function notify_quality_change(e) {
+    let overlay_text = movie_player.querySelector(".ytp-bezel-text");
+    let outer = overlay_text.parentElement.parentElement;
+    //Change the SVG within .ytp-bezel-icon, otherwise it'll be whatever it was last (play, pause, ffwd, rev, volume).
+    let overlay_icon = outer.querySelector(".ytp-bezel-icon");
+    let settings_btn = hud_right_controls.querySelector(".ytp-settings-button");
+    overlay_icon.innerHTML = settings_btn.innerHTML; //Copy the gear SVG to the overlay icon
+    //I don't copy over the quality badge, such as HD (.ytp-hd-quality-badge), 2K, 4K, etc. 
+    //because the badge hasn't been applied to the settings_btn yet. I'd need to do a mapping myself.
+    let qu = e || movie_player.getPlaybackQuality();
+    let qi = all_qualities.indexOf(qu);
+    overlay_text.innerText = quality_names[qi];
+    outer.style.removeProperty('display');
+    outer.classList.remove('ytp-bezel-text-hide');
+    clearTimeout(hide_overlay_timer); //In case quality is changed in rapid succession
+    hide_overlay_timer = setTimeout(()=>outer.style.setProperty('display', 'none'), 750);
 }
 
 // Video quality code was inspired by 'Youtube HD' by adisib. (https://greasyfork.org/en/scripts/23661-youtube-hd)
@@ -153,6 +155,7 @@ const all_y_res     = [     4320,     2880,     2160,     1440,     1080,     72
 const quality_names = [     "8K",     "4K",     "2K",  "1440p",  "1080p",  "720p",  "480p",   "360p",  "240p", "144p"];
 function set_video_quality(desired_quality) {
     if (desired_quality.toLowerCase) desired_quality = desired_quality.toLowerCase();
+    let current_quality = movie_player.getPlaybackQuality();
     let qu = "auto";
     let available_qualities = movie_player.getAvailableQualityLevels();
     switch (desired_quality) {
@@ -172,14 +175,13 @@ function set_video_quality(desired_quality) {
         case "+":    // Use + and - to increase and decrease playback quality
         case "-":
         {
-            let current_quality = movie_player.getPlaybackQuality();
             let current_index = available_qualities.indexOf(current_quality);
             let new_index = (desired_quality === "+") ? current_index - 1 : current_index + 1;
             new_index = new_index < 0 ? 0 : new_index < available_qualities.length ? new_index : available_qualities.length - 1;
             qu = available_qualities[new_index];
             break;
         }
-        default:     // Choose a quality based on name or y-resolution
+        default:     // Choose a quality based on provided name or y-resolution
         {   // If a specific quality is desired and not available, choose the next (lower) quality level.
             let desired_index = (isNaN(desired_quality)) 
                                 ? all_qualities.indexOf(desired_quality)
@@ -193,6 +195,11 @@ function set_video_quality(desired_quality) {
         }
     }
     movie_player?.setPlaybackQualityRange(qu);
+    if (qu == current_quality) {
+        //If quality didn't change, then an onPlaybackQualityChange event won't fire.
+        //In this case, let's make sure the user still sees it.
+        notify_quality_change(current_quality);
+    }
     console.log("Quality request '" + desired_quality + "': Set to '" + qu + "'");
 }
 
@@ -208,7 +215,7 @@ function enforce_video_quality(desired_quality = "FULL") {
             video_id = new_video_id;
             set_video_quality(desired_quality);
         }
-    })
+    });
 }
 
 function is_textbox_active() {
