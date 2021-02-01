@@ -59,13 +59,21 @@ function customize_HUD() {
         //Set preview thumbnail videos to loop indefinitely
         // yt is a variable in global scope of the running window
         // If this ever changes, it will silently fail. Not a big deal.
-        window?.yt?.config_?.EXPERIMENT_FLAGS?.preview_play_duration = 0;
+        (window?.yt?.config_?.EXPERIMENT_FLAGS).preview_play_duration = 0;
     }
 }
+
+// YouTube API reference is https://developers.google.com/youtube/iframe_api_reference
+// It is rather cursory, but it's better than nothing. Doesn't cover window.ytplayer, 
+// window.yt or other global variables, some of which are useful.
+// For example, all available video/audio stream formats and detailed properties are at:
+// window.ytplayer.config.args.raw_player_response.streamingData.adaptiveFormats
+// The currently active stream is the one where itag == movie_player.getVideoStats().fmt;
 
 var movie_player;
 var hud_controls;
 var hud_right_controls; //placeholder for "ytp-right-controls" HUD container
+const PlayerState = { unstarted: -1, ended: 0, playing: 1, paused: 2, buffering: 3, video_cued: 5 };
 
 function get_movie_player() {
     //There is only one div of class "html5-video-player" per page/iframe.
@@ -126,40 +134,65 @@ function show_playback_speed() {
     update_playback_speed(movie_player.getPlaybackRate());
 }
 
+let notify_quality_change = (()=>{
+    let hide_overlay_timer = undefined;
+    let gear_svg = "";
+    let get_gear_svg = function () {
+        return gear_svg = gear_svg || get_right_controls().querySelector(".ytp-settings-button")?.innerHTML || "";
+    };
+    let reset_animation = function (elem) {
+        elem.style.animation = 'none';
+        elem.offsetHeight; /* trigger reflow */
+        elem.style.animation = null; 
+      };
+    let badge_class_list = function (quality_index) {
+        let class_list = "ytp-bezel-icon";
+        if (quality_index >=0 && quality_index < q_badge_names.length) {
+            class_list += " ytp-settings-button ytp-" + q_badge_names[quality_index] + "-quality-badge";
+        }
+        return class_list;
+    };
+
+    return function(e) {
+        let overlay_text = movie_player.querySelector(".ytp-bezel-text");
+        let outer = overlay_text.parentElement.parentElement;
+        //Change the SVG within .ytp-bezel-icon, otherwise it'll be whatever it was last (play, pause, ffwd, rev, volume).
+        let overlay_icon = outer.querySelector(".ytp-bezel-icon");
+        overlay_icon.innerHTML = get_gear_svg();
+        //I don't copy over the quality badge, such as HD (.ytp-hd-quality-badge), 2K, 4K, etc. 
+        //because the badge hasn't been applied to the settings_btn yet. I'd need to do a mapping myself.
+        let qu = e || movie_player.getPlaybackQuality();
+        let qi = all_qualities.indexOf(qu);
+        reset_animation(overlay_icon.parentElement);
+        overlay_icon.classList = badge_class_list(qi);
+        overlay_text.innerText = quality_names[qi];
+        outer.style.removeProperty('display');
+        outer.classList.remove('ytp-bezel-text-hide');
+        clearTimeout(hide_overlay_timer); //In case quality is changed in rapid succession
+        hide_overlay_timer = setTimeout(() => {
+            outer.style.setProperty('display', 'none');
+            overlay_icon.classList = "ytp-bezel-icon";
+        }, 750);
+    }
+})();
+
 function enable_notify_quality_change() {
     if (!get_movie_player()) return;
     movie_player.addEventListener('onPlaybackQualityChange', notify_quality_change);
-}
-let hide_overlay_timer = undefined;
-function notify_quality_change(e) {
-    let overlay_text = movie_player.querySelector(".ytp-bezel-text");
-    let outer = overlay_text.parentElement.parentElement;
-    //Change the SVG within .ytp-bezel-icon, otherwise it'll be whatever it was last (play, pause, ffwd, rev, volume).
-    let overlay_icon = outer.querySelector(".ytp-bezel-icon");
-    let settings_btn = hud_right_controls.querySelector(".ytp-settings-button");
-    overlay_icon.innerHTML = settings_btn.innerHTML; //Copy the gear SVG to the overlay icon
-    //I don't copy over the quality badge, such as HD (.ytp-hd-quality-badge), 2K, 4K, etc. 
-    //because the badge hasn't been applied to the settings_btn yet. I'd need to do a mapping myself.
-    let qu = e || movie_player.getPlaybackQuality();
-    let qi = all_qualities.indexOf(qu);
-    overlay_text.innerText = quality_names[qi];
-    outer.style.removeProperty('display');
-    outer.classList.remove('ytp-bezel-text-hide');
-    clearTimeout(hide_overlay_timer); //In case quality is changed in rapid succession
-    hide_overlay_timer = setTimeout(()=>outer.style.setProperty('display', 'none'), 750);
 }
 
 // Video quality code was inspired by 'Youtube HD' by adisib. (https://greasyfork.org/en/scripts/23661-youtube-hd)
 const all_qualities = ["highres", "hd2880", "hd2160", "hd1440", "hd1080", "hd720", "large", "medium", "small", "tiny"];
 const all_y_res     = [     4320,     2880,     2160,     1440,     1080,     720,     480,      360,     240,    144];
-const quality_names = [     "8K",     "4K",     "2K",  "1440p",  "1080p",  "720p",  "480p",   "360p",  "240p", "144p"];
+const quality_names = [     "8K",     "5K",     "4K",  "1440p",  "1080p",  "720p",  "480p",   "360p",  "240p", "144p"];
+const q_badge_names = ["8k", "5K", "4k", "hd", "hd"]; //Badges are the red labels done as CSS ::after elements
 function set_video_quality(desired_quality) {
     if (desired_quality.toLowerCase) desired_quality = desired_quality.toLowerCase();
     let current_quality = movie_player.getPlaybackQuality();
     let qu = "auto";
-    let available_qualities = movie_player.getAvailableQualityLevels();
+    let available_qualities = movie_player.getAvailableQualityLevels().filter(q => q != "auto");
     switch (desired_quality) {
-        case "max":  // Choose highest quality available
+        case "max": // Choose highest quality available
         {
             qu = available_qualities[0];
             break;
@@ -172,7 +205,7 @@ function set_video_quality(desired_quality) {
             qu = all_qualities[all_y_res.indexOf(y_match)];
             break;
         }
-        case "+":    // Use + and - to increase and decrease playback quality
+        case "+": // Use + and - to increase and decrease playback quality
         case "-":
         {
             let current_index = available_qualities.indexOf(current_quality);
@@ -181,7 +214,7 @@ function set_video_quality(desired_quality) {
             qu = available_qualities[new_index];
             break;
         }
-        default:     // Choose a quality based on provided name or y-resolution
+        default: // Choose a quality based on provided name or y-resolution
         {   // If a specific quality is desired and not available, choose the next (lower) quality level.
             let desired_index = (isNaN(desired_quality)) 
                                 ? all_qualities.indexOf(desired_quality)
@@ -199,17 +232,21 @@ function set_video_quality(desired_quality) {
         //If quality didn't change, then an onPlaybackQualityChange event won't fire.
         //In this case, let's make sure the user still sees it.
         notify_quality_change(current_quality);
+        console.log(`Quality requested '${desired_quality}': Already at '${qu}'`);
     }
-    console.log("Quality request '" + desired_quality + "': Set to '" + qu + "'");
+    else {
+        console.log(`Quality requested '${desired_quality}': Set to '${qu}'`);
+    }
 }
 
 function enforce_video_quality(desired_quality = "FULL") {
     set_video_quality(desired_quality);
     let video_id = movie_player.getVideoData().video_id;
-    // 'loadstart' event happens when a new video is loaded, OR when a different video quality is selected.
-    // We want to enforce video quality once per video, when it is first loaded.
     let video_elem = movie_player.getElementsByTagName('video')[0];
-    video_elem.addEventListener('loadstart', (e) => {
+    video_elem.addEventListener('loadstart', () => {
+        // 'loadstart' event happens when a new video is loaded, OR when a different 
+        // video quality is selected. We want to enforce video quality once per video, 
+        // when it is first loaded.
         let new_video_id = movie_player.getVideoData().video_id;
         if (new_video_id != video_id) {
             video_id = new_video_id;
@@ -225,17 +262,48 @@ function is_textbox_active() {
 }
 
 function enable_3_second_seek() {
+    //Less than 3s tends to be unreliable, probably because of the distance between video keyframes
     if (!get_movie_player()) return;
+    let playback_rate = movie_player.getPlaybackRate();
+    let frame_rate = 30;
+    let update_frame_rate = function () {
+        let qual = movie_player.getStatsForNerds().resolution; //Data example: "854x480@30 / 854x480@30"
+        let fr = qual.substr(qual.lastIndexOf('@')+1);
+        frame_rate = parseInt(fr) || 30; //Default to 30 if fr is NaN
+    };
+    update_frame_rate();
+    movie_player.addEventListener('onPlaybackRateChange', (e) => playback_rate = e);
+    movie_player.addEventListener('onPlaybackQualityChange', update_frame_rate);
+    
+    //Seek some seconds fwd/back in clock time, not video time.
+    let seek = function (seconds = 5) {
+        let seek_time = seconds * playback_rate;
+        movie_player.seekBy(seek_time);
+    };
+    //Typically for stepping +1 or -1 frame while paused
+    let step = function (num_frames = 1) {
+        let step_time = num_frames / frame_rate;
+        movie_player.seekBy(step_time);
+    };
+
+    // Use https://keycode.info/ for key code reference
     document.addEventListener("keydown", (e) => {
-        if (e.altKey || e.ctrlKey || e.shiftKey) return;
-        if (is_textbox_active()) return;
+        if (e.altKey || e.shiftKey) return;
+        if (e.isComposing || is_textbox_active()) return;
+
         let ps = movie_player.getPlayerState();
-        if (ps == 1 || ps == 3) {  // if playing (1) or buffering (3)
-            if (e.code == "Comma") movie_player.seekBy(-3);
-            if (e.code == "Period") movie_player.seekBy(3);
+        if (ps == PlayerState.playing || ps == PlayerState.buffering) {
+            if (e.code == "ArrowLeft" && e.ctrlKey) { seek(-3); e.preventDefault(); }
+            if (e.code == "ArrowRight" && e.ctrlKey) { seek(3); e.preventDefault(); }
+        } else if (ps == PlayerState.paused) {
+            if (e.code == "ArrowLeft" && e.ctrlKey) { step(-1); e.preventDefault(); }
+            if (e.code == "ArrowRight" && e.ctrlKey) { step(1); e.preventDefault(); }
         }
         return;
-    });
+    }, { capture: true });
+    // Capture is needed so this keydown event handler runs during capturing phase, prior to the site's
+    // standard event handlers (in the bubbling phase), so that we have the opportunity to call 
+    // preventDefault() and suppress the normal behaviour.
 }
 
 function enable_quality_plus_minus() {
@@ -248,12 +316,19 @@ function enable_quality_plus_minus() {
             case "=": {
                 set_video_quality("+");
             } break;
-            case "-": {
+            case "-":
+            case "_": {
                 set_video_quality("-");
             } break;
         }
         return;
     });
+    // By default, the +/- keys next to backspace change the caption font size. This disables that.
+    document.addEventListener("keydown", (e) => {
+        if (e.altKey || e.ctrlKey) return;
+        if (is_textbox_active()) return;
+        if (["+", "=", "-", "_"].includes(e.key)) e.preventDefault();
+    }, { capture: true });
 }
 
 function enable_hide_suggested() {
