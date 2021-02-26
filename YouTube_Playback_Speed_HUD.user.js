@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Playback Speed HUD
-// @version      0.10
+// @version      0.11
 // @description  Show YouTube playback speed and time of day next to the Settings icon
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -56,10 +56,12 @@ function customize_HUD() {
     if (ENABLE_3_SECOND_SEEK)         { enable_3_second_seek(); }
     if (ENABLE_HIDE_SUGGESTED_VIDEOS) { enable_hide_suggested(); }
     if (CONTINUOUS_THUMBNAIL_PREVIEW) {
-        //Set preview thumbnail videos to loop indefinitely
-        // yt is a variable in global scope of the running window
-        // If this ever changes, it will silently fail. Not a big deal.
-        (window?.yt?.config_?.EXPERIMENT_FLAGS).preview_play_duration = 0;
+        //Set preview thumbnail videos to loop indefinitely        
+        //unsafeWindow is Tampermonkey's reference to the page's global scope, yt is a variable in global scope
+        let exp = unsafeWindow?.yt?.config_?.EXPERIMENT_FLAGS;
+        if (exp.preview_play_duration) {
+            exp.preview_play_duration = 0;
+        }
     }
 }
 
@@ -99,7 +101,7 @@ function add_HUD_item(class_name) {
     }
 }
 function hide_HUD_item(css_selector) {
-    get_hud_controls()?.querySelector(css_selector)?.setAttribute("hidden","");
+    get_hud_controls()?.querySelector(css_selector)?.setAttribute("hidden", "");
 }
 
 function disable_autoplay() {
@@ -134,7 +136,7 @@ function show_playback_speed() {
     update_playback_speed(movie_player.getPlaybackRate());
 }
 
-let notify_quality_change = (()=>{
+let notify_quality_change = (() => {
     let hide_overlay_timer = undefined;
     let gear_svg = "";
     let get_gear_svg = function () {
@@ -143,17 +145,17 @@ let notify_quality_change = (()=>{
     let reset_animation = function (elem) {
         elem.style.animation = 'none';
         elem.offsetHeight; /* trigger reflow */
-        elem.style.animation = null; 
-      };
+        elem.style.animation = null;
+    };
     let badge_class_list = function (quality_index) {
         let class_list = "ytp-bezel-icon";
-        if (quality_index >=0 && quality_index < q_badge_names.length) {
+        if (quality_index >= 0 && quality_index < q_badge_names.length) {
             class_list += " ytp-settings-button ytp-" + q_badge_names[quality_index] + "-quality-badge";
         }
         return class_list;
     };
 
-    return function(e) {
+    return function (e) {
         let overlay_text = movie_player.querySelector(".ytp-bezel-text");
         let outer = overlay_text.parentElement.parentElement;
         //Change the SVG within .ytp-bezel-icon, otherwise it'll be whatever it was last (play, pause, ffwd, rev, volume).
@@ -216,12 +218,12 @@ function set_video_quality(desired_quality) {
         }
         default: // Choose a quality based on provided name or y-resolution
         {   // If a specific quality is desired and not available, choose the next (lower) quality level.
-            let desired_index = (isNaN(desired_quality)) 
+            let desired_index = (isNaN(desired_quality))
                                 ? all_qualities.indexOf(desired_quality)
                                 : all_y_res.indexOf(desired_quality);
             if (desired_index >= 0) {
                 let found_quality = all_qualities.slice(desired_index, all_qualities.length)
-                                                .find(q => available_qualities.includes(q));
+                                                 .find(q => available_qualities.includes(q));
                 qu = found_quality || "auto";
             }
             break;
@@ -268,13 +270,13 @@ function enable_3_second_seek() {
     let frame_rate = 30;
     let update_frame_rate = function () {
         let qual = movie_player.getStatsForNerds().resolution; //Data example: "854x480@30 / 854x480@30"
-        let fr = qual.substr(qual.lastIndexOf('@')+1);
+        let fr = qual.substr(qual.lastIndexOf('@') + 1);
         frame_rate = parseInt(fr) || 30; //Default to 30 if fr is NaN
     };
     update_frame_rate();
     movie_player.addEventListener('onPlaybackRateChange', (e) => playback_rate = e);
     movie_player.addEventListener('onPlaybackQualityChange', update_frame_rate);
-    
+
     //Seek some seconds fwd/back in clock time, not video time.
     let seek = function (seconds = 5) {
         let seek_time = seconds * playback_rate;
@@ -358,7 +360,7 @@ function enable_hide_suggested() {
 
     // This is where we put the hide-related_ attribute that triggers the above CSS rules
     let flex_layout = document.querySelector("#content ytd-watch-flexy");
-    let hide_related_video_column = function() {
+    let hide_related_video_column = function () {
         flex_layout.toggleAttribute("hide-related_");
     }
 
@@ -381,6 +383,7 @@ function isFunction(f) {
 }
 
 function is_page_ready() {
+    if (undefined === unsafeWindow.yt) return false; // unsafeWindow is Tampermonkey's reference to the page's global scope
     if (undefined === get_right_controls()) return false;
     if (undefined === get_movie_player()?.getPlaybackRate) return false;
     if (undefined === get_movie_player()?.getPlaybackQuality) return false;
@@ -389,7 +392,8 @@ function is_page_ready() {
     return true;
 }
 
-function keep_trying(callback_try, callback_success = undefined, retries = 4, retry_ms = 100) {
+let keep_trying_timeout_id = 0;
+function keep_trying(callback_try, callback_success = undefined, retries = 4, retry_ms = 200) {
     // 'callback_try' function is run every 'retry_ms' milliseconds, for a maximum of 'retries' attempts
     // after the page has completed loading. It may retry numerous times before the document is ready.
     // If 'callback_try' succeeds, then 'callback_success' function is run once (if one is provided).
@@ -404,7 +408,7 @@ function keep_trying(callback_try, callback_success = undefined, retries = 4, re
             retries--;
         }
         if (retries >= 0) {
-            setTimeout(() => keep_trying(callback_try, callback_success, retries, retry_ms), retry_ms);
+            keep_trying_timeout_id = setTimeout(() => keep_trying(callback_try, callback_success, retries, retry_ms), retry_ms);
         }
     }
 }
@@ -414,8 +418,19 @@ function on_player_ready(ready, callback) {
         callback();
     }
     else {
-        window.addEventListener("yt-navigate-finish",
-                                ()=>keep_trying(ready, callback), 
-                                { once: true, passive: true, capture: true });
+        let on_nav_finished = function () {
+            // There's a race condition where keep_trying() is still trying while user navigates 
+            // and triggers another 'yt-navigate-finish' event. In this case, clear timeout so 
+            // that previous keep_trying() is interrupted.
+            clearTimeout(keep_trying_timeout_id);
+
+            keep_trying(ready, () => {
+                // Given that youtube reuses the video player, we can remove the event 
+                // listener once we finally determine that the page is ready.
+                window.removeEventListener("yt-navigate-finish", on_nav_finished);
+                callback();
+            });
+        };
+        window.addEventListener("yt-navigate-finish", on_nav_finished);
     }
 }
