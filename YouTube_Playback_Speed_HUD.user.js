@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Playback Speed HUD
-// @version      0.11
+// @version      0.12
 // @description  Show YouTube playback speed and time of day next to the Settings icon
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -293,6 +293,11 @@ function enable_3_second_seek() {
         if (e.altKey || e.shiftKey) return;
         if (e.isComposing || is_textbox_active()) return;
 
+        //nocheckin
+        //TODO: This overrides volume adjustment and also doesn't let you scroll the page. this needs its own config variable, and should only override arrow keys for the movie_player.
+        if (e.code == "ArrowUp")   { movie_player.showControls(); movie_player.wakeUpControls(); e.preventDefault(); return; }
+        if (e.code == "ArrowDown") { movie_player.hideControls(); e.preventDefault(); return; }
+
         let ps = movie_player.getPlayerState();
         if (ps == PlayerState.playing || ps == PlayerState.buffering) {
             if (e.code == "ArrowLeft" && e.ctrlKey) { seek(-3); e.preventDefault(); }
@@ -387,6 +392,7 @@ function is_page_ready() {
     if (undefined === get_right_controls()) return false;
     if (undefined === get_movie_player()?.getPlaybackRate) return false;
     if (undefined === get_movie_player()?.getPlaybackQuality) return false;
+    if (DISABLE_AUTOPLAY && document.querySelector('.ytp-autonav-toggle-button') == null) return false;
     if (ENABLE_HIDE_SUGGESTED_VIDEOS && ((document.querySelector("#secondary-inner") == null)
                                      || (document.querySelector("#related") == null))) return false;
     return true;
