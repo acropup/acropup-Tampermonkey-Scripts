@@ -292,6 +292,7 @@ function enable_3_second_seek() {
     document.addEventListener("keydown", (e) => {
         if (e.altKey || e.shiftKey) return;
         if (e.isComposing || is_textbox_active()) return;
+        if (window.location.pathname !== "/watch") return;
 
         //nocheckin
         //TODO: This overrides volume adjustment and also doesn't let you scroll the page. this needs its own config variable, and should only override arrow keys for the movie_player.
