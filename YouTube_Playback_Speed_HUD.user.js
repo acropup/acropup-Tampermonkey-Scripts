@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Playback Speed HUD
-// @version      0.12
+// @version      0.13
 // @description  Show YouTube playback speed and time of day next to the Settings icon
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -31,6 +31,7 @@ const ENFORCE_VIDEO_QUALITY  = "FULL";
 // The options below are not HUD-related tweaks, but they improve YouTube in different ways.
 const ENABLE_QUALITY_PLUS_MINUS    = true; // Plus (+) key chooses higher video quality, Minus (-) key lowers video quality.
 const ENABLE_3_SECOND_SEEK         = true; // Comma (,) and period (.) seek 3s back and forward, but only while a video is playing.
+const OVERRIDE_UP_DOWN_KEYS        = true; // ArrowUp/Down shows/hides the overlay controls, Ctrl+ArrowUp/Down and Home/End scrolls page.
 const ENABLE_HIDE_SUGGESTED_VIDEOS = true; // Adds a button to hide the right column of suggested videos.
 const CONTINUOUS_THUMBNAIL_PREVIEW = true; // When hovering over video thumbnails, the video preview will repeat forever.
 
@@ -54,6 +55,7 @@ function customize_HUD() {
     if (ENFORCE_VIDEO_QUALITY) { enforce_video_quality(ENFORCE_VIDEO_QUALITY); }
     if (ENABLE_QUALITY_PLUS_MINUS)    { enable_quality_plus_minus(); }
     if (ENABLE_3_SECOND_SEEK)         { enable_3_second_seek(); }
+    if (OVERRIDE_UP_DOWN_KEYS)        { override_up_down_keys(); }
     if (ENABLE_HIDE_SUGGESTED_VIDEOS) { enable_hide_suggested(); }
     if (CONTINUOUS_THUMBNAIL_PREVIEW) {
         //Set preview thumbnail videos to loop indefinitely        
@@ -72,9 +74,9 @@ function customize_HUD() {
 // window.ytplayer.config.args.raw_player_response.streamingData.adaptiveFormats
 // The currently active stream is the one where itag == movie_player.getVideoStats().fmt;
 
-var movie_player;
-var hud_controls;
-var hud_right_controls; //placeholder for "ytp-right-controls" HUD container
+let movie_player;
+let hud_controls;
+let hud_right_controls; //placeholder for "ytp-right-controls" HUD container
 const PlayerState = { unstarted: -1, ended: 0, playing: 1, paused: 2, buffering: 3, video_cued: 5 };
 
 function get_movie_player() {
@@ -294,11 +296,6 @@ function enable_3_second_seek() {
         if (e.isComposing || is_textbox_active()) return;
         if (window.location.pathname !== "/watch") return;
 
-        //nocheckin
-        //TODO: This overrides volume adjustment and also doesn't let you scroll the page. this needs its own config variable, and should only override arrow keys for the movie_player.
-        if (e.code == "ArrowUp")   { movie_player.showControls(); movie_player.wakeUpControls(); e.preventDefault(); return; }
-        if (e.code == "ArrowDown") { movie_player.hideControls(); e.preventDefault(); return; }
-
         let ps = movie_player.getPlayerState();
         if (ps == PlayerState.playing || ps == PlayerState.buffering) {
             if (e.code == "ArrowLeft" && e.ctrlKey) { seek(-3); e.preventDefault(); }
@@ -307,6 +304,42 @@ function enable_3_second_seek() {
             if (e.code == "ArrowLeft" && e.ctrlKey) { step(-1); e.preventDefault(); }
             if (e.code == "ArrowRight" && e.ctrlKey) { step(1); e.preventDefault(); }
         }
+        return;
+    }, { capture: true });
+    // Capture is needed so this keydown event handler runs during capturing phase, prior to the site's
+    // standard event handlers (in the bubbling phase), so that we have the opportunity to call 
+    // preventDefault() and suppress the normal behaviour.
+}
+
+function override_up_down_keys() {
+    // Changes behaviour of ArrowUp, ArrownDown, Home, and End keys
+    if (!get_movie_player()) return;
+
+    // Use https://keycode.info/ for key code reference
+    document.addEventListener("keydown", (e) => {
+        if (e.altKey || e.shiftKey) return;
+        if (e.isComposing || is_textbox_active()) return;
+        if (window.location.pathname !== "/watch") return;
+
+        if (e.ctrlKey || window.scrollY > 0) {
+            // Arrow keys scroll the page vertically if not already at top, or if Ctrl+Arrow is pressed.
+            // 40px seems to be the default scroll distance. I don't know if this is always true or should be compensated in some situations.
+            //TODO: Calling scrollBy() with behavior: 'smooth' repeatedly, from holding down arrow keys, does not work well in Chrome.
+            //      Currently using 'auto' snap scrolling to remedy this, but smooth interpolated scrolling would be better.
+            if (e.code == "ArrowUp")   { window.scrollBy({ top: -40, left: 0, behavior: 'auto' }); e.preventDefault(); return; }
+            if (e.code == "ArrowDown") { window.scrollBy({ top:  40, left: 0, behavior: 'auto' }); e.preventDefault(); return; }
+        }
+        else {
+            // hideControls() hides controls until showControls(), and ignores mouse movement and play/pause state.
+            // Regular time-based autohide uses '.html5-video-player.ytp-autohide', whereas hideControls() puts style attributes
+            // on all HUD elements, such as movie_player.querySelector(".ytp-chrome-bottom").style.display == "none";
+            if (e.code == "ArrowUp")   { movie_player.showControls(); movie_player.wakeUpControls(); e.preventDefault(); return; }
+            if (e.code == "ArrowDown") { movie_player.hideControls(); e.preventDefault(); return; }
+        }
+
+        // By default, Home and End keys within the video player will seek to start start and end. Unnecessary and error-prone. Use 0 to seek to start.
+        if (e.code == "Home") { window.scrollTo({ top: 0, left: 0, behavior: 'smooth' }); e.preventDefault(); return; }
+        if (e.code == "End") { window.scrollTo({ top: document.scrollingElement.scrollHeight, left: 0, behavior: 'smooth' }); e.preventDefault(); return; }
         return;
     }, { capture: true });
     // Capture is needed so this keydown event handler runs during capturing phase, prior to the site's
