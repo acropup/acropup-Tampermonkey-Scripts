@@ -60,7 +60,7 @@ function customize_HUD() {
     if (ENABLE_HIDE_SUGGESTED_VIDEOS) { enable_hide_suggested(); enable_hide_suggested_new_button();}
     if (HIDE_SUGGESTED_VIDEOS)        {        hide_suggested(); }
     if (CONTINUOUS_THUMBNAIL_PREVIEW) {
-        //Set preview thumbnail videos to loop indefinitely        
+        //Set preview thumbnail videos to loop indefinitely
         //unsafeWindow is Tampermonkey's reference to the page's global scope, yt is a variable in global scope
         let exp = unsafeWindow?.yt?.config_?.EXPERIMENT_FLAGS;
         if (exp.preview_play_duration) {
@@ -70,7 +70,7 @@ function customize_HUD() {
 }
 
 // YouTube API reference is https://developers.google.com/youtube/iframe_api_reference
-// It is rather cursory, but it's better than nothing. Doesn't cover window.ytplayer, 
+// It is rather cursory, but it's better than nothing. Doesn't cover window.ytplayer,
 // window.yt or other global variables, some of which are useful.
 // For example, all available video/audio stream formats and detailed properties are at:
 // window.ytplayer.config.args.raw_player_response.streamingData.adaptiveFormats
@@ -165,7 +165,7 @@ let notify_quality_change = (() => {
         //Change the SVG within .ytp-bezel-icon, otherwise it'll be whatever it was last (play, pause, ffwd, rev, volume).
         let overlay_icon = outer.querySelector(".ytp-bezel-icon");
         overlay_icon.innerHTML = get_gear_svg();
-        //I don't copy over the quality badge, such as HD (.ytp-hd-quality-badge), 2K, 4K, etc. 
+        //I don't copy over the quality badge, such as HD (.ytp-hd-quality-badge), 2K, 4K, etc.
         //because the badge hasn't been applied to the settings_btn yet. I'd need to do a mapping myself.
         let qu = e || movie_player.getPlaybackQuality();
         let qi = all_qualities.indexOf(qu);
@@ -250,8 +250,8 @@ function enforce_video_quality(desired_quality = "FULL") {
     let video_id = movie_player.getVideoData().video_id;
     let video_elem = movie_player.getElementsByTagName('video')[0];
     video_elem.addEventListener('loadstart', () => {
-        // 'loadstart' event happens when a new video is loaded, OR when a different 
-        // video quality is selected. We want to enforce video quality once per video, 
+        // 'loadstart' event happens when a new video is loaded, OR when a different
+        // video quality is selected. We want to enforce video quality once per video,
         // when it is first loaded.
         let new_video_id = movie_player.getVideoData().video_id;
         if (new_video_id != video_id) {
@@ -300,16 +300,18 @@ function enable_3_second_seek() {
 
         let ps = movie_player.getPlayerState();
         if (ps == PlayerState.playing || ps == PlayerState.buffering) {
+            // Seek ±3 seconds
             if (e.code == "ArrowLeft" && e.ctrlKey) { seek(-3); e.preventDefault(); }
             if (e.code == "ArrowRight" && e.ctrlKey) { seek(3); e.preventDefault(); }
         } else if (ps == PlayerState.paused) {
-            if (e.code == "ArrowLeft" && e.ctrlKey) { step(-1); e.preventDefault(); }
-            if (e.code == "ArrowRight" && e.ctrlKey) { step(1); e.preventDefault(); }
+            // Step ±5 frames
+            if (e.code == "ArrowLeft" && e.ctrlKey) { step(-5); e.preventDefault(); }
+            if (e.code == "ArrowRight" && e.ctrlKey) { step(5); e.preventDefault(); }
         }
         return;
     }, { capture: true });
     // Capture is needed so this keydown event handler runs during capturing phase, prior to the site's
-    // standard event handlers (in the bubbling phase), so that we have the opportunity to call 
+    // standard event handlers (in the bubbling phase), so that we have the opportunity to call
     // preventDefault() and suppress the normal behaviour.
 }
 
@@ -345,7 +347,7 @@ function override_up_down_keys() {
         return;
     }, { capture: true });
     // Capture is needed so this keydown event handler runs during capturing phase, prior to the site's
-    // standard event handlers (in the bubbling phase), so that we have the opportunity to call 
+    // standard event handlers (in the bubbling phase), so that we have the opportunity to call
     // preventDefault() and suppress the normal behaviour.
 }
 
@@ -386,9 +388,9 @@ function enable_hide_suggested() {
       ytd-watch-flexy[is-two-columns_] #primary #hide-related {
         display: none;
       }
-      /*ytd-watch-flexy #hide-related::before {
+      ytd-watch-flexy #hide-related::before {
         content: "Hide suggested videos";
-      }*/
+      }
       ytd-watch-flexy[hide-related_] #hide-related::before {
         content: "Show suggested videos";
       }
@@ -423,20 +425,24 @@ function enable_hide_suggested() {
 function enable_hide_suggested_new_button() {
     // Youtube now has a related video filter-by-topic feature. I'm putting a Hide All button in this list.
     // AFAIK, this feature is still in AB testing mode, so I should not release an update that depends on it.
-    //TODO: Once this becomes the new default, we'll need to add appropriate css here with GM_addStyle()
-    
+    // As of August 2023, the feature is alive on my account, but not when I'm signed out of Youtube.
+    //TODO: Once this becomes the new default, we'll need to add appropriate css here with GM_addStyle(), and
+    //      also uncomment the check in is_page_ready() that checks for the existence of related_filter_buttons.
+
     let related_filter_buttons = document.querySelector('yt-related-chip-cloud-renderer #chips');
+    if (!related_filter_buttons) return; //The #chips still seem to be in A/B testing mode, so we can't depend on them being there
     // Clone the first button and modify from there
     let hide_all_button = related_filter_buttons.firstElementChild.cloneNode(true);
+    // 'selected' attribute gets added when page rebuilds because somewhere youtube still thinks the first item is selected. Override visual aspects of this.
+    hide_all_button.style.color = "var(--yt-spec-text-primary)";
     hide_all_button.style.backgroundColor = "rgb(255 120 120 / 30%)"; // Satisfactory for both light and dark mode
-    hide_all_button.removeAttribute("selected");
-    hide_all_button.classList.remove("iron-selected");
-    hide_all_button.ariaSelected = "false";
+
     // Put "Hide All" button as first in filter list
     related_filter_buttons.prepend(hide_all_button);
     // For some reason, title and innerText disappear upon prepend, so modify them after
     hide_all_button.firstElementChild.title = "Hide All";
     hide_all_button.firstElementChild.innerText = "Hide All";
+    hide_all_button.firstElementChild.style.display = "block"; //class 'is-empty' is added whenever page is rearranged
 
     // This is where we put the hide-related_ attribute that triggers the above CSS rules
     let flex_layout = document.querySelector("#content ytd-watch-flexy");
@@ -473,7 +479,7 @@ function is_page_ready() {
     if ((ENABLE_HIDE_SUGGESTED_VIDEOS || HIDE_SUGGESTED_VIDEOS)
         && ((document.querySelector("#secondary-inner") == null)
         || (document.querySelector("#related") == null)
-        || (document.querySelector('yt-related-chip-cloud-renderer #chips')) == null)) return false;
+      /*|| (document.querySelector('yt-related-chip-cloud-renderer #chips')) == null)*/)) return false;
     return true;
 }
 
@@ -504,13 +510,13 @@ function on_player_ready(ready, callback) {
     }
     else {
         let on_nav_finished = function () {
-            // There's a race condition where keep_trying() is still trying while user navigates 
-            // and triggers another 'yt-navigate-finish' event. In this case, clear timeout so 
+            // There's a race condition where keep_trying() is still trying while user navigates
+            // and triggers another 'yt-navigate-finish' event. In this case, clear timeout so
             // that previous keep_trying() is interrupted.
             clearTimeout(keep_trying_timeout_id);
 
             keep_trying(ready, () => {
-                // Given that youtube reuses the video player, we can remove the event 
+                // Given that youtube reuses the video player, we can remove the event
                 // listener once we finally determine that the page is ready.
                 window.removeEventListener("yt-navigate-finish", on_nav_finished);
                 callback();
