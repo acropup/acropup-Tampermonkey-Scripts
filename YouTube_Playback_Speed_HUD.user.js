@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Playback Speed HUD
-// @version      0.13
+// @version      0.14
 // @description  Show YouTube playback speed and time of day next to the Settings icon
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -33,6 +33,7 @@ const ENABLE_QUALITY_PLUS_MINUS    = true; // Plus (+) key chooses higher video 
 const ENABLE_3_SECOND_SEEK         = true; // Comma (,) and period (.) seek 3s back and forward, but only while a video is playing.
 const OVERRIDE_UP_DOWN_KEYS        = true; // ArrowUp/Down shows/hides the overlay controls, Ctrl+ArrowUp/Down and Home/End scrolls page.
 const ENABLE_HIDE_SUGGESTED_VIDEOS = true; // Adds a button to hide the right column of suggested videos.
+const HIDE_SUGGESTED_VIDEOS        = true; // Hides the right column of suggested videos by default.
 const CONTINUOUS_THUMBNAIL_PREVIEW = true; // When hovering over video thumbnails, the video preview will repeat forever.
 
 //Wait until video player is loaded before modifying HUD
@@ -40,7 +41,7 @@ on_player_ready(is_page_ready, customize_HUD);
 
 
 function customize_HUD() {
-    //This only needs to be done once, because the video player is reused 
+    //This only needs to be done once, because the video player is reused
     console.log("------------Customizing HUD-------------");
     if (SHOW_TIME_OF_DAY)    { show_time_of_day(); }
     if (SHOW_PLAYBACK_SPEED) { show_playback_speed(); }
@@ -56,7 +57,8 @@ function customize_HUD() {
     if (ENABLE_QUALITY_PLUS_MINUS)    { enable_quality_plus_minus(); }
     if (ENABLE_3_SECOND_SEEK)         { enable_3_second_seek(); }
     if (OVERRIDE_UP_DOWN_KEYS)        { override_up_down_keys(); }
-    if (ENABLE_HIDE_SUGGESTED_VIDEOS) { enable_hide_suggested(); }
+    if (ENABLE_HIDE_SUGGESTED_VIDEOS) { enable_hide_suggested(); enable_hide_suggested_new_button();}
+    if (HIDE_SUGGESTED_VIDEOS)        {        hide_suggested(); }
     if (CONTINUOUS_THUMBNAIL_PREVIEW) {
         //Set preview thumbnail videos to loop indefinitely        
         //unsafeWindow is Tampermonkey's reference to the page's global scope, yt is a variable in global scope
@@ -373,6 +375,7 @@ function enable_quality_plus_minus() {
 }
 
 function enable_hide_suggested() {
+    // Styling for the "HIDE SUGGESTED VIDEOS" button
     GM_addStyle(`
       ytd-watch-flexy #hide-related {
         position: absolute;
@@ -383,9 +386,9 @@ function enable_hide_suggested() {
       ytd-watch-flexy[is-two-columns_] #primary #hide-related {
         display: none;
       }
-      ytd-watch-flexy #hide-related::before {
+      /*ytd-watch-flexy #hide-related::before {
         content: "Hide suggested videos";
-      }
+      }*/
       ytd-watch-flexy[hide-related_] #hide-related::before {
         content: "Show suggested videos";
       }
@@ -417,6 +420,46 @@ function enable_hide_suggested() {
     merch.parentElement.insertBefore(hide_btn2, merch.nextSibling);
 }
 
+function enable_hide_suggested_new_button() {
+    // Youtube now has a related video filter-by-topic feature. I'm putting a Hide All button in this list.
+    // AFAIK, this feature is still in AB testing mode, so I should not release an update that depends on it.
+    //TODO: Once this becomes the new default, we'll need to add appropriate css here with GM_addStyle()
+    
+    let related_filter_buttons = document.querySelector('yt-related-chip-cloud-renderer #chips');
+    // Clone the first button and modify from there
+    let hide_all_button = related_filter_buttons.firstElementChild.cloneNode(true);
+    hide_all_button.style.backgroundColor = "rgb(255 120 120 / 30%)"; // Satisfactory for both light and dark mode
+    hide_all_button.removeAttribute("selected");
+    hide_all_button.classList.remove("iron-selected");
+    hide_all_button.ariaSelected = "false";
+    // Put "Hide All" button as first in filter list
+    related_filter_buttons.prepend(hide_all_button);
+    // For some reason, title and innerText disappear upon prepend, so modify them after
+    hide_all_button.firstElementChild.title = "Hide All";
+    hide_all_button.firstElementChild.innerText = "Hide All";
+
+    // This is where we put the hide-related_ attribute that triggers the above CSS rules
+    let flex_layout = document.querySelector("#content ytd-watch-flexy");
+    let hide_related_video_column = function () {
+        flex_layout.toggleAttribute("hide-related_");
+    }
+    hide_all_button.onclick = hide_related_video_column;
+}
+
+
+function hide_suggested() {
+    if (!ENABLE_HIDE_SUGGESTED_VIDEOS) {
+        // ENABLE_HIDE_SUGGESTED_VIDEOS normally adds this CSS itself, so only add this CSS if false
+        GM_addStyle(`
+        ytd-watch-flexy[hide-related_] #related.ytd-watch-flexy {
+            display: none;
+        }`);
+    }
+    // Set suggested videos list as hidden by default
+    let flex_layout = document.querySelector("#content ytd-watch-flexy");
+    flex_layout.setAttribute("hide-related_");
+}
+
 function isFunction(f) {
     return Object.prototype.toString.call(f) == '[object Function]';
 }
@@ -427,8 +470,10 @@ function is_page_ready() {
     if (undefined === get_movie_player()?.getPlaybackRate) return false;
     if (undefined === get_movie_player()?.getPlaybackQuality) return false;
     if (DISABLE_AUTOPLAY && document.querySelector('.ytp-autonav-toggle-button') == null) return false;
-    if (ENABLE_HIDE_SUGGESTED_VIDEOS && ((document.querySelector("#secondary-inner") == null)
-                                     || (document.querySelector("#related") == null))) return false;
+    if ((ENABLE_HIDE_SUGGESTED_VIDEOS || HIDE_SUGGESTED_VIDEOS)
+        && ((document.querySelector("#secondary-inner") == null)
+        || (document.querySelector("#related") == null)
+        || (document.querySelector('yt-related-chip-cloud-renderer #chips')) == null)) return false;
     return true;
 }
 
