@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Thumbnail Zoom
-// @version      0.1
+// @version      0.2
 // @description  Show large image previews for video thumbnails and channel images on YouTube. Ctrl+Right Click, or Left+Right Click to activate.
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -121,7 +121,7 @@ Playlist/mix thumbnails - It shows the thumbnail of the first video to play, whi
         // Attempt to match video thumbnails:
         // https://i.ytimg.com/vi/${video_id}/${quality}default.jpg`
         // https://i.ytimg.com/vi_webp/${video_id}/${quality}default.webp`
-        video_id ??= reference_url.match(/^https:\/\/i\.ytimg\.com\/(?:vi|an)(?:_webp)?\/([a-zA-Z0-9_-]+)/)?.[1];
+        video_id ??= reference_url.match(/^https:\/\/i\.ytimg\.com\/vi(?:_webp)?\/([a-zA-Z0-9_-]+)/)?.[1];
         if (video_id) {
             return query_for_best_image(video_id);
         }
