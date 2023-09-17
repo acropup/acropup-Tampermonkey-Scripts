@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Thumbnail Zoom
-// @version      0.2
+// @version      0.3
 // @description  Show large image previews for video thumbnails and channel images on YouTube. Ctrl+Right Click, or Left+Right Click to activate.
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -119,9 +119,10 @@ Playlist/mix thumbnails - It shows the thumbnail of the first video to play, whi
         // https://www.youtube.com/shorts/${video_id}
         let video_id = reference_url.match(/^https:\/\/www\.youtube\.com\/(?:watch\?v=|shorts\/)([a-zA-Z0-9_-]+)/)?.[1];
         // Attempt to match video thumbnails:
-        // https://i.ytimg.com/vi/${video_id}/${quality}default.jpg`
-        // https://i.ytimg.com/vi_webp/${video_id}/${quality}default.webp`
-        video_id ??= reference_url.match(/^https:\/\/i\.ytimg\.com\/vi(?:_webp)?\/([a-zA-Z0-9_-]+)/)?.[1];
+        // https://i.ytimg.com/vi/${video_id}/${quality}default.jpg
+        // https://i.ytimg.com/vi_webp/${video_id}/${quality}default.webp
+        // https://i.ytimg.com/an_webp/${video_id}/${quality}default_6s.webp?du=3000&sqp=CL_hmagG&rs=AOn4CLC2oBC9qd6PSbagGYYEqBgbvqdfMw
+        video_id ??= reference_url.match(/^https:\/\/i\.ytimg\.com\/(?:vi|an)(?:_webp)?\/([a-zA-Z0-9_-]+)\/(?:maxres|sd|hq|mq)?default(?:_[0-9]+s)?\.(?:jpg|webp)/)?.[1];
         if (video_id) {
             return query_for_best_image(video_id);
         }
@@ -135,7 +136,7 @@ Playlist/mix thumbnails - It shows the thumbnail of the first video to play, whi
         }
         // Attempt to match thumbnails for (potentially) external links:
         // https://i.ytimg.com/an/Q76dMggUH1M/18269099204233283421_mq.jpg?v=62a185b9
-        let ytimg_alt_url = reference_url.match(/^https:\/\/i\.ytimg\.com\/an(?:_webp)?\/[a-zA-Z0-9]+\/[0-9a-f-]+/)?.[0];
+        let ytimg_alt_url = reference_url.match(/^(https:\/\/i\.ytimg\.com\/an(?:_webp)?\/[a-zA-Z0-9]+\/[0-9a-f-]+)_[mh]q\.(?:jpg|webp)/)?.[1];
         if (ytimg_alt_url) {
             // Aside from _mq and _hq for medium and high quality, I don't know how to get larger images of this kind
             return ytimg_alt_url + "_hq.jpg";
@@ -204,7 +205,7 @@ Playlist/mix thumbnails - It shows the thumbnail of the first video to play, whi
                     break;
                 }
             }
-            else if (elem.nodeName == "IMG") {
+            else if (elem.nodeName == "IMG" && !elem.src.startsWith("data:image/gif;base64")) {
                 reference_url = elem.src;
                 break;
             }
