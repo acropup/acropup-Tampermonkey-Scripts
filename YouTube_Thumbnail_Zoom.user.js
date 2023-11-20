@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Thumbnail Zoom
-// @version      0.3
+// @version      0.4
 // @description  Show large image previews for video thumbnails and channel images on YouTube. Ctrl+Right Click, or Left+Right Click to activate.
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -13,9 +13,12 @@
 /* --- Various image URLs for thumbnails on YouTube ---
 
 Video thumbnails in JPG and WEBP format
-`https://i.ytimg.com/vi/${video_id}/${quality}default.jpg`
-`https://i.ytimg.com/vi_webp/${video_id}/${quality}default.webp`
+`https://i.ytimg.com/vi/${video_id}/${quality}${thumb_id}.jpg`
+`https://i.ytimg.com/vi_webp/${video_id}/${quality}${thumb_id}.webp`
 where quality can be any one of [ 'maxres', 'sd', 'hq', 'mq', '' ].
+and thumb_id can be any one of [ 'default', '1', '2', or '3' ] to get different thumbnails.
+'0.jpg' returns the same as 'hqdefault.jpg'. 'hq720.jpg' also exists for some reason.
+Thoroughly described on https://stackoverflow.com/questions/2068344/how-do-i-get-a-youtube-video-thumbnail-from-the-youtube-api/#2068371
 
 Thumbnails for (potentially) external links
 https://i.ytimg.com/an/Q76dMggUH1M/18269099204233283421${quality}.jpg?v=62a185b9
@@ -120,9 +123,10 @@ Playlist/mix thumbnails - It shows the thumbnail of the first video to play, whi
         let video_id = reference_url.match(/^https:\/\/www\.youtube\.com\/(?:watch\?v=|shorts\/)([a-zA-Z0-9_-]+)/)?.[1];
         // Attempt to match video thumbnails:
         // https://i.ytimg.com/vi/${video_id}/${quality}default.jpg
+        // https://i.ytimg.com/vi/${video_id}/hq720.jpg
         // https://i.ytimg.com/vi_webp/${video_id}/${quality}default.webp
         // https://i.ytimg.com/an_webp/${video_id}/${quality}default_6s.webp?du=3000&sqp=CL_hmagG&rs=AOn4CLC2oBC9qd6PSbagGYYEqBgbvqdfMw
-        video_id ??= reference_url.match(/^https:\/\/i\.ytimg\.com\/(?:vi|an)(?:_webp)?\/([a-zA-Z0-9_-]+)\/(?:maxres|sd|hq|mq)?default(?:_[0-9]+s)?\.(?:jpg|webp)/)?.[1];
+        video_id ??= reference_url.match(/^https:\/\/i\.ytimg\.com\/(?:vi|an)(?:_webp)?\/([a-zA-Z0-9_-]+)\/(?:(?:maxres|sd|hq|mq)?default|hq720)(?:_[0-9]+s)?\.(?:jpg|webp)/)?.[1];
         if (video_id) {
             return query_for_best_image(video_id);
         }
