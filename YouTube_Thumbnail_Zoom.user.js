@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Thumbnail Zoom
-// @version      0.4
+// @version      0.5
 // @description  Show large image previews for video thumbnails and channel images on YouTube. Ctrl+Right Click, or Left+Right Click to activate.
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -194,15 +194,16 @@ Playlist/mix thumbnails - It shows the thumbnail of the first video to play, whi
 
         let reference_url = undefined;
         do { // A do{}while(false) loop lets us break to the end of the loop after setting reference_url
+            if ((elem.nodeName == "DIV" && elem.id == "inline-preview-player") ||
+                (elem.nodeName == "VIDEO" && elem.classList.contains("html5-main-video"))) {
+                // This handles the larger thumbnail previews (where it'll play the entire video if you let it)
+                // DIV#inline-preview-player for quick clicks on static thumbnail, VIDEO.video-stream.html5-main-video for clicks while playing the video
+                let video_thumb_container = elem.closest('a#media-container-link.ytd-video-preview[href^="/watch"]');
+                reference_url = video_thumb_container.href;
+                break;
+            }
             if (elem.nodeName == "DIV") {
-                if (elem.id == "thumbnail-container" || elem.classList.contains("ytp-inline-preview-scrim")) {
-                    // This handles the larger thumbnail previews (where it'll play the entire video if you let it)
-                    // DIV#thumbnail-container for quick clicks on static thumbnail, DIV.ytp-inline-preview-scrim for clicks while playing the video
-                    let video_thumb_container = elem.closest('a#media-container-link.ytd-video-preview[href^="/watch"]');
-                    reference_url = video_thumb_container.href;
-                    break;
-                }
-                else if (elem.classList.contains("iv-card-image") ||          // for thumbnails in the video player's cards drawer
+                if (elem.classList.contains("iv-card-image") ||          // for thumbnails in the video player's cards drawer
                          elem.classList.contains("ytp-ce-expanding-image") || // for an end-scene channel overlay or external link overlay
                          elem.classList.contains("ytp-autonav-endscreen-upnext-thumbnail")) { // for the annoying up-next countdown autoplay video
                     reference_url = get_background_image_url(elem);
@@ -226,6 +227,12 @@ Playlist/mix thumbnails - It shows the thumbnail of the first video to play, whi
             let video_thumb_anchor = elem.closest('a#thumbnail[href^="/watch"]');
             if (video_thumb_anchor) {
                 reference_url = video_thumb_anchor.href;
+                break;
+            }
+            // Channel avatars on homepage, subscriptions page, and channel pages exist in a convoluted yt-avatar-shape where img isn't the topmost element.
+            let channel_avatar = elem.closest('yt-avatar-shape')?.querySelector('img');
+            if (channel_avatar) {
+                reference_url = channel_avatar.src;
                 break;
             }
         } while (false);
