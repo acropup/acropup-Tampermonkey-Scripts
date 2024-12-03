@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         YouTube Thumbnail Zoom
-// @version      0.5
+// @version      0.6
 // @description  Show large image previews for video thumbnails and channel images on YouTube. Ctrl+Right Click, or Left+Right Click to activate.
 // @homepage     https://github.com/acropup/acropup-Tampermonkey-Scripts/
 // @author       Shane Burgess
@@ -126,7 +126,8 @@ Playlist/mix thumbnails - It shows the thumbnail of the first video to play, whi
         // https://i.ytimg.com/vi/${video_id}/hq720.jpg
         // https://i.ytimg.com/vi_webp/${video_id}/${quality}default.webp
         // https://i.ytimg.com/an_webp/${video_id}/${quality}default_6s.webp?du=3000&sqp=CL_hmagG&rs=AOn4CLC2oBC9qd6PSbagGYYEqBgbvqdfMw
-        video_id ??= reference_url.match(/^https:\/\/i\.ytimg\.com\/(?:vi|an)(?:_webp)?\/([a-zA-Z0-9_-]+)\/(?:(?:maxres|sd|hq|mq)?default|hq720)(?:_[0-9]+s)?\.(?:jpg|webp)/)?.[1];
+        // https://i.ytimg.com/vi_webp/${video_id}/movieposter_en.webp
+        video_id ??= reference_url.match(/^https:\/\/i\.ytimg\.com\/(?:vi|an)(?:_webp)?\/([a-zA-Z0-9_-]+)\/(?:(?:maxres|sd|hq|mq)?default|hq720|movieposter_en)(?:_[0-9]+s)?\.(?:jpg|webp)/)?.[1];
         if (video_id) {
             return query_for_best_image(video_id);
         }
